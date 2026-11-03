@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eines Farmàcia</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #1a1d23; --fg-dim: #5c6370;
+  --accent: #0e8a7b; --accent-soft: #e6f5f2; --border: #e2e5ea; --radius: 10px;
+  --font: 'DM Sans', system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111318; --surface: #1a1d24; --fg: #e1e4ea; --fg-dim: #8b909c;
+    --accent: #34c9b4; --accent-soft: #162925; --border: #2a2e38;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111318; --surface: #1a1d24; --fg: #e1e4ea; --fg-dim: #8b909c;
+  --accent: #34c9b4; --accent-soft: #162925; --border: #2a2e38;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font);
+  margin: 0; padding: 40px 20px; line-height: 1.6;
+}
+.wrap { max-width: 600px; margin: 0 auto; }
+h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 6px; }
+.subtitle { color: var(--fg-dim); font-size: 0.9rem; margin-bottom: 32px; }
+.tools { display: flex; flex-direction: column; gap: 12px; }
+.tool-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 20px; text-decoration: none; color: var(--fg);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.tool-card:hover {
+  border-color: var(--accent); box-shadow: 0 2px 12px rgba(14,138,123,0.10);
+}
+.tool-name {
+  font-weight: 600; font-size: 1.05rem; margin-bottom: 4px;
+  display: flex; align-items: center; gap: 8px;
+}
+.tool-name .icon { font-size: 1.2rem; }
+.tool-desc { color: var(--fg-dim); font-size: 0.85rem; }
+.footer { margin-top: 40px; color: var(--fg-dim); font-size: 0.78rem; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Eines Farmàcia</h1>
+  <p class="subtitle">Eines internes de gestió — Farmàcia Central Bcn</p>
+
+  <div class="tools">
+    <a class="tool-card" href="eina_generics.html">
+      <div class="tool-name"><span class="icon">💊</span> Eina Genèrics</div>
+      <div class="tool-desc">Neteja exports FARMATIC: identifica substitucions rellevants, exclou genèrics i suma per vendedor.</div>
+    </a>
+
+    <!-- Afegeix més eines aquí:
+    <a class="tool-card" href="nova_eina.html">
+      <div class="tool-name"><span class="icon">📊</span> Nova Eina</div>
+      <div class="tool-desc">Descripció breu de l'eina.</div>
+    </a>
+    -->
+  </div>
+
+  <div class="footer">Ús intern — no compartir</div>
+</div>
+</body>
+</html>
