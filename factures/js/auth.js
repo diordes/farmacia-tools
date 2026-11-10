@@ -127,11 +127,13 @@ const Auth = (() => {
       UI.updateScanButtons();
       UI.updateDriveAccountSelector && UI.updateDriveAccountSelector();
       AppLog.success('✅ Compte connectat: ' + email);
+      alert('✅ Compte connectat: ' + email);
 
       if (pendingResolve) { pendingResolve(email); pendingResolve = null; }
     })
     .catch(e => {
-      AppLog.error('Error obtenint info del compte: ' + e.message);
+      AppLog.error('❌ Error obtenint info del compte: ' + e.message);
+      alert('❌ Error connectant compte: ' + e.message + '\n\nComprova que el compte estigui a la llista de "Test users" a Google Cloud Console.');
       console.error('[Auth] userinfo fetch failed:', e);
       if (pendingResolve) { pendingResolve(null); pendingResolve = null; }
     });
