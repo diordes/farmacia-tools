@@ -169,13 +169,14 @@ const UI = (() => {
       <td>${escapeHtml(inv.invoiceNumber || '-')}</td>
       <td>${inv.amount ? inv.amount + ' €' : '-'}</td>
       <td title="${escapeHtml(inv.haciendaName)}">
-        <div style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.75rem">
+        <div class="hacienda-name" data-key="${inv.dedupKey}" onclick="UI.editHaciendaName('${inv.dedupKey}')" title="Clic per editar" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.75rem;cursor:pointer;border-bottom:1px dashed var(--text-muted)">
           ${escapeHtml(inv.haciendaName)}
         </div>
       </td>
       <td><span class="source-badge">${sourceLabel} ${escapeHtml(inv.accountEmail?.split('@')[0] || inv.source)}</span></td>
       <td class="action-btns">
-        ${inv.driveLink ? `<a href="${inv.driveLink}" target="_blank" class="btn btn-sm btn-outline">📁</a>` : ''}
+        ${inv.source === 'gmail' ? `<button class="btn btn-sm btn-outline" onclick="Processor.downloadOne('${inv.dedupKey}')" title="Descarregar amb nom Hisenda">⬇️</button>` : ''}
+        ${inv.driveLink ? `<a href="${inv.driveLink}" target="_blank" class="btn btn-sm btn-outline" title="Obrir a Drive">📁</a>` : ''}
         ${inv.status === 'duplicate' && inv.dupReason ? `<span title="${escapeHtml(inv.dupReason)}" style="cursor:help">ℹ️</span>` : ''}
       </td>
     `;
@@ -368,6 +369,25 @@ const UI = (() => {
     return div.innerHTML;
   }
 
+  function editHaciendaName(dedupKey) {
+    const inv = allInvoices.find(i => i.dedupKey === dedupKey);
+    if (!inv) return;
+
+    const newName = prompt('Editar nom Hisenda:', inv.haciendaName);
+    if (newName === null || newName.trim() === '' || newName === inv.haciendaName) return;
+
+    inv.haciendaName = newName.trim();
+
+    // Update the cell in the DOM
+    const cell = document.querySelector(`.hacienda-name[data-key="${CSS.escape(dedupKey)}"]`);
+    if (cell) {
+      cell.textContent = inv.haciendaName;
+      cell.title = inv.haciendaName;
+    }
+
+    AppLog.info(`Nom Hisenda editat: ${inv.haciendaName}`);
+  }
+
   function getAllInvoices() {
     return allInvoices;
   }
@@ -376,6 +396,7 @@ const UI = (() => {
     togglePanel, updateAccountsBar, updateAccountsList, updateScanButtons,
     showProgress, updateProgress, showUploadArea,
     renderResults, addInvoiceRow, updateInvoiceRow, updateStats,
-    applyFilters, clearFilters, getSelectedInvoices, toggleSelectAll, getAllInvoices
+    applyFilters, clearFilters, getSelectedInvoices, toggleSelectAll, getAllInvoices,
+    editHaciendaName, updateDriveAccountSelector
   };
 })();

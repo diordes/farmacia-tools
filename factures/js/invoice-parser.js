@@ -98,7 +98,7 @@ const InvoiceParser = (() => {
 
     // Amount
     if (amount) {
-      parts.push(amount + 'EUR');
+      parts.push(amount + '€');
     }
 
     let name = parts.join('_') + '.' + ext;

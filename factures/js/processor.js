@@ -140,12 +140,18 @@ const Processor = (() => {
 
     const accounts = Auth.getActiveTokens();
     if (accounts.length === 0) {
-      alert('Connecta un compte de Gmail primer per pujar a Drive.');
+      alert('Connecta un compte primer per pujar a Drive.');
       return;
     }
 
-    // Use first account for Drive upload
-    const email = accounts[0].email;
+    // Use the configured Drive account, or first available
+    const driveTarget = Config.get('driveAccount') || accounts[0].email;
+    const driveAcc = accounts.find(a => a.email === driveTarget);
+    if (!driveAcc) {
+      alert('⚠️ El compte Drive destí (' + driveTarget + ') no està connectat. Connecta\'l primer.');
+      return;
+    }
+    const email = driveAcc.email;
 
     UI.showProgress(true);
     let uploaded = 0;
@@ -210,6 +216,40 @@ const Processor = (() => {
     alert(`✅ ${uploaded} de ${files.length} fitxers pujats a Drive`);
   }
 
+  // Download a single invoice with Hacienda name
+  async function downloadOne(dedupKey) {
+    const inv = UI.getAllInvoices().find(i => i.dedupKey === dedupKey);
+    if (!inv) { alert('Factura no trobada'); return; }
+
+    if (inv.source === 'manual') {
+      AppLog.warn('Les factures pujades manualment no es poden descarregar des de Gmail.');
+      return;
+    }
+
+    AppLog.info(`Descarregant ${inv.haciendaName}...`);
+
+    try {
+      await Auth.refreshIfNeeded(inv.accountEmail);
+      const data = await GmailService.downloadAttachment(
+        inv.accountEmail, inv.messageId, inv.attachmentId
+      );
+
+      const blob = new Blob([data], { type: inv.mimeType || 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = inv.haciendaName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      AppLog.success(`✅ Descarregat: ${inv.haciendaName}`);
+    } catch (e) {
+      AppLog.error(`Error descarregant: ${e.message}`);
+    }
+  }
+
   function readFileAsArrayBuffer(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -219,5 +259,5 @@ const Processor = (() => {
     });
   }
 
-  return { uploadSelected, downloadSelected, uploadManualFiles };
+  return { uploadSelected, downloadSelected, uploadManualFiles, downloadOne };
 })();
