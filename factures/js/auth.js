@@ -172,9 +172,9 @@ const Auth = (() => {
       pendingResolve = resolve;
       const opts = {};
       if (loginHint) {
-        // Reconnecting a known account — use login_hint + consent to force re-auth
+        // Reconnecting — silent refresh (no popup, app already authorized)
         opts.login_hint = loginHint;
-        opts.prompt = 'consent';
+        opts.prompt = '';
       } else {
         // New account — show picker
         opts.prompt = 'select_account';
