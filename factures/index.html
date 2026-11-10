@@ -134,25 +134,73 @@
         </div>
       </div>
 
-      <!-- Filters -->
+      <!-- Advanced Search / Filters -->
       <div id="filters-row" class="filters-row hidden">
-        <select id="filter-account" onchange="UI.applyFilters()">
-          <option value="">Tots els comptes</option>
-        </select>
-        <select id="filter-supplier" onchange="UI.applyFilters()">
-          <option value="">Tots els proveïdors</option>
-        </select>
-        <select id="filter-status" onchange="UI.applyFilters()">
-          <option value="">Tot</option>
-          <option value="new">🆕 Noves</option>
-          <option value="uploaded">✅ Pujades</option>
-          <option value="duplicate">🔁 Duplicades</option>
-          <option value="error">❌ Error</option>
-        </select>
-        <input type="text" id="filter-search" placeholder="Buscar..." oninput="UI.applyFilters()" />
-        <div class="filter-right">
-          <button class="btn btn-success btn-sm" onclick="Processor.uploadSelected()">📤 Pujar seleccionades a Drive</button>
-          <button class="btn btn-outline btn-sm" onclick="Processor.downloadSelected()">💾 Descarregar ZIP</button>
+        <div class="filters-grid">
+          <!-- Row 1: Main filters -->
+          <div class="filter-group">
+            <label>Proveïdor</label>
+            <select id="filter-supplier" onchange="UI.applyFilters()">
+              <option value="">Tots els proveïdors</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Compte</label>
+            <select id="filter-account" onchange="UI.applyFilters()">
+              <option value="">Tots els comptes</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Estat</label>
+            <select id="filter-status" onchange="UI.applyFilters()">
+              <option value="">Tot</option>
+              <option value="new">🆕 Noves</option>
+              <option value="uploaded">✅ Pujades</option>
+              <option value="duplicate">🔁 Duplicades</option>
+              <option value="error">❌ Error</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Text lliure</label>
+            <input type="text" id="filter-search" placeholder="Assumpte, núm. factura..." oninput="UI.applyFilters()" />
+          </div>
+
+          <!-- Row 2: Price and date ranges -->
+          <div class="filter-group">
+            <label>Import exacte (€)</label>
+            <input type="number" id="filter-amount-exact" step="0.01" placeholder="150.50" oninput="UI.applyFilters()" />
+          </div>
+          <div class="filter-group filter-range">
+            <label>Rang import (€)</label>
+            <div class="range-inputs">
+              <input type="number" id="filter-amount-min" step="0.01" placeholder="Des de" oninput="UI.applyFilters()" />
+              <span class="range-sep">—</span>
+              <input type="number" id="filter-amount-max" step="0.01" placeholder="Fins a" oninput="UI.applyFilters()" />
+            </div>
+          </div>
+          <div class="filter-group filter-range">
+            <label>Rang data</label>
+            <div class="range-inputs">
+              <input type="date" id="filter-date-from" oninput="UI.applyFilters()" />
+              <span class="range-sep">—</span>
+              <input type="date" id="filter-date-to" oninput="UI.applyFilters()" />
+            </div>
+          </div>
+          <div class="filter-group filter-actions-col">
+            <label>&nbsp;</label>
+            <button class="btn btn-ghost btn-sm" onclick="UI.clearFilters()">🗑️ Netejar filtres</button>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="filter-actions">
+          <div class="filter-count">
+            <span id="filter-count-text"></span>
+          </div>
+          <div class="filter-right">
+            <button class="btn btn-success btn-sm" onclick="Processor.uploadSelected()">📤 Pujar seleccionades a Drive</button>
+            <button class="btn btn-outline btn-sm" onclick="Processor.downloadSelected()">💾 Descarregar ZIP</button>
+          </div>
         </div>
       </div>
 

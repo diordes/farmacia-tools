@@ -5,7 +5,7 @@ const Config = (() => {
   const STORAGE_KEY = 'factures_tool_config';
 
   const DEFAULTS = {
-    clientId: '',
+    clientId: '549787827669-0bp6nfh8rg518hn2q3uj8l92dbk67s42.apps.googleusercontent.com',
     apiKey: '',
     driveFolderName: 'Factures_Comptabilitat',
     monthsBack: 3,

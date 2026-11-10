@@ -251,19 +251,80 @@ const UI = (() => {
     const account = document.getElementById('filter-account')?.value || '';
     const status = document.getElementById('filter-status')?.value || '';
     const search = (document.getElementById('filter-search')?.value || '').toLowerCase();
+    const amountExact = document.getElementById('filter-amount-exact')?.value || '';
+    const amountMin = document.getElementById('filter-amount-min')?.value || '';
+    const amountMax = document.getElementById('filter-amount-max')?.value || '';
+    const dateFrom = document.getElementById('filter-date-from')?.value || '';
+    const dateTo = document.getElementById('filter-date-to')?.value || '';
 
     const body = document.getElementById('results-body');
     if (!body) return;
 
+    let visibleCount = 0;
     const rows = body.querySelectorAll('tr[data-dedup-key]');
+
     for (const row of rows) {
+      const inv = allInvoices.find(i => i.dedupKey === row.dataset.dedupKey);
       let show = true;
+
       if (supplier && row.dataset.supplier !== supplier) show = false;
       if (account && row.dataset.account !== account) show = false;
       if (status && row.dataset.status !== status) show = false;
       if (search && !row.textContent.toLowerCase().includes(search)) show = false;
+
+      // Amount exact (with 0.01 tolerance)
+      if (show && amountExact && inv) {
+        const target = parseFloat(amountExact);
+        const actual = parseFloat(inv.amount || 0);
+        if (Math.abs(actual - target) > 0.01) show = false;
+      }
+
+      // Amount range
+      if (show && amountMin && inv) {
+        const min = parseFloat(amountMin);
+        const actual = parseFloat(inv.amount || 0);
+        if (actual < min) show = false;
+      }
+      if (show && amountMax && inv) {
+        const max = parseFloat(amountMax);
+        const actual = parseFloat(inv.amount || 0);
+        if (actual > max) show = false;
+      }
+
+      // Date range (compare YYYY-MM-DD strings)
+      if (show && inv) {
+        const invDate = inv.parsedDate || '';
+        if (dateFrom && invDate && invDate < dateFrom) show = false;
+        if (dateTo && invDate && invDate > dateTo) show = false;
+      }
+
       row.style.display = show ? '' : 'none';
+      if (show) visibleCount++;
     }
+
+    // Update filter count
+    const countText = document.getElementById('filter-count-text');
+    if (countText) {
+      const total = rows.length;
+      if (visibleCount === total) {
+        countText.textContent = `${total} factures`;
+      } else {
+        countText.textContent = `${visibleCount} de ${total} factures`;
+      }
+    }
+  }
+
+  function clearFilters() {
+    const ids = [
+      'filter-supplier', 'filter-account', 'filter-status', 'filter-search',
+      'filter-amount-exact', 'filter-amount-min', 'filter-amount-max',
+      'filter-date-from', 'filter-date-to'
+    ];
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    }
+    applyFilters();
   }
 
   function getSelectedInvoices() {
@@ -302,6 +363,6 @@ const UI = (() => {
     togglePanel, updateAccountsBar, updateAccountsList, updateScanButtons,
     showProgress, updateProgress, showUploadArea,
     renderResults, addInvoiceRow, updateInvoiceRow, updateStats,
-    applyFilters, getSelectedInvoices, toggleSelectAll, getAllInvoices
+    applyFilters, clearFilters, getSelectedInvoices, toggleSelectAll, getAllInvoices
   };
 })();
