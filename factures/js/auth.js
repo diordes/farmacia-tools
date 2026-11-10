@@ -91,11 +91,16 @@ const Auth = (() => {
   }
 
   function handleTokenResponse(resp) {
+    console.log('[Auth] Token response received:', Object.keys(resp));
     if (resp.error) {
-      AppLog.error('Error d\'autenticació: ' + resp.error);
+      const msg = 'Error d\'autenticació: ' + resp.error + (resp.error_description ? ' — ' + resp.error_description : '');
+      AppLog.error(msg);
+      console.error('[Auth]', msg);
       if (pendingResolve) { pendingResolve(null); pendingResolve = null; }
       return;
     }
+
+    AppLog.info('Token rebut! Obtenint info del compte...');
 
     // Get user email
     gapi.client.setToken({ access_token: resp.access_token });
@@ -104,7 +109,10 @@ const Auth = (() => {
     fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: 'Bearer ' + resp.access_token }
     })
-    .then(r => r.json())
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
     .then(info => {
       const email = info.email;
       const accounts = loadAccounts();
@@ -117,22 +125,30 @@ const Auth = (() => {
 
       UI.updateAccountsBar();
       UI.updateScanButtons();
-      AppLog.success('Compte connectat: ' + email);
+      UI.updateDriveAccountSelector && UI.updateDriveAccountSelector();
+      AppLog.success('✅ Compte connectat: ' + email);
 
       if (pendingResolve) { pendingResolve(email); pendingResolve = null; }
     })
     .catch(e => {
       AppLog.error('Error obtenint info del compte: ' + e.message);
+      console.error('[Auth] userinfo fetch failed:', e);
       if (pendingResolve) { pendingResolve(null); pendingResolve = null; }
     });
   }
 
   function handleTokenError(err) {
-    AppLog.error('Error OAuth: ' + JSON.stringify(err));
+    const msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+    console.error('[Auth] OAuth error callback:', err);
+    if (err && err.type === 'popup_closed') {
+      AppLog.warn('⚠️ S\'ha tancat la finestra d\'autenticació. Torna a provar.');
+    } else {
+      AppLog.error('Error OAuth: ' + msg);
+    }
     if (pendingResolve) { pendingResolve(null); pendingResolve = null; }
   }
 
-  async function addAccount() {
+  async function addAccount(loginHint) {
     const clientId = Config.get('clientId');
     if (!clientId) {
       alert('⚠️ Primer configura el Client ID de Google Cloud a ⚙️ Configuració');
@@ -148,11 +164,42 @@ const Auth = (() => {
       return;
     }
 
+    AppLog.info('🔐 Obrint finestra d\'autenticació de Google...');
+
     return new Promise(resolve => {
       pendingResolve = resolve;
-      // prompt:'consent' forces account selector even if already logged in
-      tokenClient.requestAccessToken({ prompt: 'consent' });
+      const opts = {};
+      if (loginHint) {
+        // Reconnecting a known account — use login_hint + consent to force re-auth
+        opts.login_hint = loginHint;
+        opts.prompt = 'consent';
+      } else {
+        // New account — show picker
+        opts.prompt = 'select_account';
+      }
+      tokenClient.requestAccessToken(opts);
     });
+  }
+
+  // Reconnect all expired accounts
+  async function reconnectAll() {
+    const accounts = loadAccounts();
+    const now = Date.now();
+    const expired = Object.values(accounts).filter(a => a.expiresAt <= now);
+
+    if (expired.length === 0) {
+      AppLog.info('Tots els comptes estan actius.');
+      return;
+    }
+
+    AppLog.info(`Reconnectant ${expired.length} compte(s) expirat(s)...`);
+
+    for (const acc of expired) {
+      AppLog.info(`Reconnectant ${acc.email}...`);
+      await addAccount(acc.email);
+      // Small delay between auth popups
+      await new Promise(r => setTimeout(r, 500));
+    }
   }
 
   function removeAccount(email) {
@@ -196,5 +243,5 @@ const Auth = (() => {
     return true;
   }
 
-  return { init, addAccount, removeAccount, getAccounts, getActiveTokens, useAccount, refreshIfNeeded, loadAccounts };
+  return { init, addAccount, removeAccount, reconnectAll, getAccounts, getActiveTokens, useAccount, refreshIfNeeded, loadAccounts };
 })();

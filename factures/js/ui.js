@@ -57,6 +57,7 @@ const UI = (() => {
       div.innerHTML = `
         <span class="dot" style="width:8px;height:8px;border-radius:50%;background:${isActive ? 'var(--success)' : 'var(--danger)'}"></span>
         <span style="flex:1">${acc.email} ${isActive ? '(actiu)' : '(expirat)'}</span>
+        ${!isActive ? `<button class="btn btn-sm btn-outline" onclick="Auth.addAccount('${acc.email}').then(() => UI.updateAccountsList())">🔄 Reconnectar</button>` : ''}
         <button class="btn btn-sm btn-danger" onclick="Auth.removeAccount('${acc.email}')">Eliminar</button>
       `;
       list.appendChild(div);
