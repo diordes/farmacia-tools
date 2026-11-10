@@ -88,18 +88,13 @@ const Dedup = (() => {
   function areSimilarFilenames(name1, name2) {
     if (!name1 || !name2) return false;
 
-    // Normalize: lowercase, remove spaces and special chars
-    const norm = s => s.toLowerCase().replace(/[\s_.-]+/g, '').replace(/\.(pdf|xlsx?|xml)$/i, '');
+    // Normalize: lowercase, remove spaces and special chars, remove extension
+    const norm = s => s.toLowerCase().replace(/\.(pdf|xlsx?|xml)$/i, '').replace(/[\s_.-]+/g, '');
     const n1 = norm(name1);
     const n2 = norm(name2);
 
-    // Exact match after normalization
-    if (n1 === n2) return true;
-
-    // One contains the other
-    if (n1.includes(n2) || n2.includes(n1)) return true;
-
-    return false;
+    // Only exact match after normalization (no fuzzy includes — too aggressive)
+    return n1 === n2;
   }
 
   // Cross-check with Drive files
