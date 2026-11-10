@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neteja Genèrics — Farmàcia Central BCN</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="../css/portal.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="logo">
+        <a href="../" class="back-link" title="Tornar al portal">←</a>
+        <span class="logo-icon">💊</span>
+        <div>
+          <h1>Neteja Genèrics</h1>
+          <p class="subtitle">Farmatic → Excel net de substitucions</p>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- Upload area -->
+      <div id="upload-area" class="upload-area">
+        <div class="upload-content">
+          <div class="upload-icon">📂</div>
+          <p class="upload-title">Arrossega l'Excel de Farmatic aquí</p>
+          <p class="upload-hint">o clica per seleccionar (.xlsx, .xls)</p>
+          <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div id="progress-section" class="progress-section" hidden>
+        <div class="progress-header">
+          <span id="progress-label">Processant...</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar-track">
+          <div id="progress-bar" class="progress-bar-fill"></div>
+        </div>
+        <div id="progress-detail" class="progress-detail"></div>
+      </div>
+
+      <!-- Results -->
+      <div id="results-section" class="results-section" hidden>
+        <h2>Resultats</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-initial">0</div>
+            <div class="stat-label">Files inicials</div>
+          </div>
+          <div class="stat-card stat-removed">
+            <div class="stat-value" id="stat-removed">0</div>
+            <div class="stat-label">Eliminades</div>
+          </div>
+          <div class="stat-card stat-kept">
+            <div class="stat-value" id="stat-kept">0</div>
+            <div class="stat-label">Conservades</div>
+          </div>
+        </div>
+
+        <!-- Breakdown -->
+        <div class="breakdown">
+          <h3>Detall per pas</h3>
+          <div id="breakdown-list" class="breakdown-list"></div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+          <button id="btn-download" class="btn btn-primary">📥 Descarregar Excel net</button>
+          <button id="btn-reset" class="btn btn-secondary">🔄 Netejar un altre fitxer</button>
+        </div>
+      </div>
+
+      <!-- Log -->
+      <div id="log-section" class="log-section">
+        <details>
+          <summary>📋 Log de processament</summary>
+          <div id="log-content" class="log-content"></div>
+        </details>
+      </div>
+    </main>
+
+    <footer>
+      <p>Farmàcia Central BCN · Eines internes · <a href="../">Tornar al portal</a></p>
+    </footer>
+  </div>
+
+  <script src="cleaner.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
