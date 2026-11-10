@@ -91,11 +91,16 @@ const Auth = (() => {
   }
 
   function handleTokenResponse(resp) {
+    console.log('[Auth] Token response received:', Object.keys(resp));
     if (resp.error) {
-      AppLog.error('Error d\'autenticació: ' + resp.error);
+      const msg = 'Error d\'autenticació: ' + resp.error + (resp.error_description ? ' — ' + resp.error_description : '');
+      AppLog.error(msg);
+      console.error('[Auth]', msg);
       if (pendingResolve) { pendingResolve(null); pendingResolve = null; }
       return;
     }
+
+    AppLog.info('Token rebut! Obtenint info del compte...');
 
     // Get user email
     gapi.client.setToken({ access_token: resp.access_token });
@@ -104,7 +109,10 @@ const Auth = (() => {
     fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: 'Bearer ' + resp.access_token }
     })
-    .then(r => r.json())
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
     .then(info => {
       const email = info.email;
       const accounts = loadAccounts();
@@ -117,18 +125,26 @@ const Auth = (() => {
 
       UI.updateAccountsBar();
       UI.updateScanButtons();
-      AppLog.success('Compte connectat: ' + email);
+      UI.updateDriveAccountSelector && UI.updateDriveAccountSelector();
+      AppLog.success('✅ Compte connectat: ' + email);
 
       if (pendingResolve) { pendingResolve(email); pendingResolve = null; }
     })
     .catch(e => {
       AppLog.error('Error obtenint info del compte: ' + e.message);
+      console.error('[Auth] userinfo fetch failed:', e);
       if (pendingResolve) { pendingResolve(null); pendingResolve = null; }
     });
   }
 
   function handleTokenError(err) {
-    AppLog.error('Error OAuth: ' + JSON.stringify(err));
+    const msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+    console.error('[Auth] OAuth error callback:', err);
+    if (err && err.type === 'popup_closed') {
+      AppLog.warn('⚠️ S\'ha tancat la finestra d\'autenticació. Torna a provar.');
+    } else {
+      AppLog.error('Error OAuth: ' + msg);
+    }
     if (pendingResolve) { pendingResolve(null); pendingResolve = null; }
   }
 
@@ -148,10 +164,13 @@ const Auth = (() => {
       return;
     }
 
+    AppLog.info('🔐 Obrint finestra d\'autenticació de Google...');
+
     return new Promise(resolve => {
       pendingResolve = resolve;
-      // prompt:'consent' forces account selector even if already logged in
-      tokenClient.requestAccessToken({ prompt: 'consent' });
+      // 'select_account' shows account picker without forcing re-consent
+      // This avoids popup_closed errors on unverified apps where consent was already granted
+      tokenClient.requestAccessToken({ prompt: 'select_account' });
     });
   }
 
