@@ -7,7 +7,8 @@ const Config = (() => {
   const DEFAULTS = {
     clientId: '549787827669-0bp6nfh8rg518hn2q3uj8l92dbk67s42.apps.googleusercontent.com',
     apiKey: '',
-    driveFolderName: 'Factures_Comptabilitat',
+    driveAccount: '',  // email del compte Drive destí (buit = mateixa que l'origen)
+    driveFolderName: 'Factures {YEAR}',
     monthsBack: 3,
     sources: [],  // external web sources
     accounts: []  // {email, token} — tokens stored separately
@@ -37,8 +38,11 @@ const Config = (() => {
     const driveFolder = document.getElementById('input-drive-folder')?.value?.trim();
     const monthsBack = parseInt(document.getElementById('input-months-back')?.value) || 3;
 
+    const driveAccount = document.getElementById('input-drive-account')?.value?.trim();
+
     if (clientId) cfg.clientId = clientId;
     if (apiKey !== undefined) cfg.apiKey = apiKey;
+    if (driveAccount !== undefined) cfg.driveAccount = driveAccount;
     if (driveFolder) cfg.driveFolderName = driveFolder;
     cfg.monthsBack = monthsBack;
 
@@ -68,6 +72,7 @@ const Config = (() => {
     const el = (id) => document.getElementById(id);
     if (el('input-client-id')) el('input-client-id').value = cfg.clientId || '';
     if (el('input-api-key')) el('input-api-key').value = cfg.apiKey || '';
+    if (el('input-drive-account')) el('input-drive-account').value = cfg.driveAccount || '';
     if (el('input-drive-folder')) el('input-drive-folder').value = cfg.driveFolderName || 'Factures_Comptabilitat';
     if (el('input-months-back')) el('input-months-back').value = cfg.monthsBack || 3;
   }

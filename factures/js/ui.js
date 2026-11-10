@@ -61,6 +61,19 @@ const UI = (() => {
       `;
       list.appendChild(div);
     }
+
+    // Update Drive account selector
+    updateDriveAccountSelector(accounts);
+  }
+
+  function updateDriveAccountSelector(accounts) {
+    const sel = document.getElementById('input-drive-account');
+    if (!sel) return;
+    const currentVal = sel.value || Config.get('driveAccount') || '';
+    sel.innerHTML = '<option value="">Mateix compte que l\'origen</option>';
+    for (const acc of (accounts || Auth.getAccounts())) {
+      sel.innerHTML += `<option value="${acc.email}" ${acc.email === currentVal ? 'selected' : ''}>${acc.email}</option>`;
+    }
   }
 
   function updateScanButtons() {

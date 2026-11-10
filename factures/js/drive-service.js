@@ -6,16 +6,26 @@ const DriveService = (() => {
   // Cache folder IDs to avoid repeated lookups
   const folderCache = {};
 
-  // Get or create the root folder
+  // Get the Drive target account (configured or same as source)
+  function getDriveAccount(sourceEmail) {
+    const configured = Config.get('driveAccount');
+    return configured || sourceEmail;
+  }
+
+  // Get or create the root folder (uses year: "Factures 2026")
   async function getRootFolder(email) {
-    const folderName = Config.get('driveFolderName') || 'Factures_Comptabilitat';
-    return await getOrCreateFolder(email, folderName, 'root');
+    const driveEmail = getDriveAccount(email);
+    let folderName = Config.get('driveFolderName') || 'Factures_{YEAR}';
+    // Replace {YEAR} placeholder with current year
+    folderName = folderName.replace('{YEAR}', new Date().getFullYear());
+    return await getOrCreateFolder(driveEmail, folderName, 'root');
   }
 
   // Get or create a subfolder (e.g., per supplier)
   async function getSupplierFolder(email, supplierName) {
+    const driveEmail = getDriveAccount(email);
     const rootId = await getRootFolder(email);
-    return await getOrCreateFolder(email, supplierName, rootId);
+    return await getOrCreateFolder(driveEmail, supplierName, rootId);
   }
 
   // Get or create a folder by name under a parent
@@ -58,11 +68,12 @@ const DriveService = (() => {
 
   // Upload a file to Drive
   async function uploadFile(email, folderId, fileName, data, mimeType) {
-    if (!Auth.useAccount(email)) {
-      throw new Error('Token no disponible per ' + email);
+    const driveEmail = getDriveAccount(email);
+    if (!Auth.useAccount(driveEmail)) {
+      throw new Error('Token no disponible per ' + driveEmail);
     }
 
-    const account = Auth.loadAccounts()[email];
+    const account = Auth.loadAccounts()[driveEmail];
     const token = account.accessToken;
 
     // Use multipart upload for files
@@ -121,7 +132,8 @@ const DriveService = (() => {
 
   // Check if a file already exists in a folder (for dedup)
   async function fileExists(email, folderId, fileName) {
-    if (!Auth.useAccount(email)) return false;
+    const driveEmail = getDriveAccount(email);
+    if (!Auth.useAccount(driveEmail)) return false;
 
     const query = `name='${fileName.replace(/'/g, "\\'")}' and '${folderId}' in parents and trashed=false`;
     const resp = await gapi.client.drive.files.list({
@@ -135,8 +147,9 @@ const DriveService = (() => {
 
   // List all files in the root folder (for dedup across all suppliers)
   async function listAllInvoices(email) {
+    const driveEmail = getDriveAccount(email);
     const rootId = await getRootFolder(email);
-    if (!Auth.useAccount(email)) return [];
+    if (!Auth.useAccount(driveEmail)) return [];
 
     const files = [];
     let pageToken = null;

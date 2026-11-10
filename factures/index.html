@@ -56,8 +56,14 @@
 
         <section>
           <h3>Carpeta Drive destí</h3>
+          <label>Compte Drive destí (on es pugen TOTES les factures)</label>
+          <select id="input-drive-account">
+            <option value="">Mateix compte que l'origen</option>
+          </select>
+          <p class="help-text">Selecciona un compte connectat. Totes les factures (de qualsevol Gmail) es pujaran a aquest Drive.</p>
           <label>Nom de la carpeta arrel</label>
-          <input type="text" id="input-drive-folder" value="Factures_Comptabilitat" />
+          <input type="text" id="input-drive-folder" value="Factures {YEAR}" />
+          <p class="help-text">{YEAR} es substitueix automàticament per l'any actual (2026, 2027...)</p>
           <label>Mesos enrere a buscar (per defecte)</label>
           <input type="number" id="input-months-back" value="3" min="1" max="24" />
         </section>
