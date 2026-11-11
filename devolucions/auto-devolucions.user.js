@@ -5,6 +5,7 @@
 // @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare, Fedefarma, Cofares)
 // @author       Farmàcia Central BCN
 // @match        https://my.alliance-healthcare.es/*
+// @match        https://diordes.github.io/farmacia-tools/*
 // @grant        none
 // @run-at       document-idle
 // ==/UserScript==
