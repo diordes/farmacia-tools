@@ -1,21 +1,21 @@
 /* ============================================================
-   GmailService â Search and download invoices from Gmail
+   GmailService — Search and download invoices from Gmail
    ============================================================ */
 const GmailService = (() => {
 
   // Search terms that indicate an invoice
   const INVOICE_TERMS = [
     'factura', 'invoice', 'fra ', 'fra.', 'fra:', 'fra/',
-    'nota de crÃ¨dit', 'nota de credito', 'abono', 'credit note',
-    'facturaciÃ³n', 'facturaciÃ³', 'liquidaciÃ³n', 'liquidaciÃ³',
+    'nota de crèdit', 'nota de credito', 'abono', 'credit note',
+    'facturación', 'facturació', 'liquidación', 'liquidació',
     'rectificativa', 'cargo', 'adeudo'
   ];
 
   // Terms to EXCLUDE (not invoices!)
   const EXCLUDE_TERMS = [
     'aviso de pago', 'avis de pagament',
-    'confirmaciÃ³n de pedido', 'confirmaciÃ³ de comanda',
-    'albarÃ¡n', 'albarÃ ',
+    'confirmación de pedido', 'confirmació de comanda',
+    'albarán', 'albarà',
     'presupuesto', 'pressupost',
     'acuerdo comercial', 'acord comercial'
   ];
@@ -23,7 +23,7 @@ const GmailService = (() => {
   // Filename patterns for invoice attachments
   const INVOICE_FILENAMES = [
     'factura', 'invoice', 'fra_', 'fra-', 'facture', 'rechnung',
-    'liquidacion', 'liquidaciÃ³', 'nota_credito', 'rectificativa'
+    'liquidacion', 'liquidació', 'nota_credito', 'rectificativa'
   ];
 
   // Build Gmail search query
@@ -47,9 +47,9 @@ const GmailService = (() => {
       const profile = await gapi.client.gmail.users.getProfile({ userId: 'me' });
       const realEmail = profile.result.emailAddress;
       if (realEmail !== email) {
-        AppLog.error(`â ï¸ TOKEN INCORRECTE! VolÃ­em ${email} perÃ² l'API veu ${realEmail}`);
+        AppLog.error(`⚠️ TOKEN INCORRECTE! Volíem ${email} però l'API veu ${realEmail}`);
       } else {
-        AppLog.info(`[${email}] â Token verificat â API veu ${realEmail} (${profile.result.messagesTotal} missatges totals)`);
+        AppLog.info(`[${email}] ✓ Token verificat — API veu ${realEmail} (${profile.result.messagesTotal} missatges totals)`);
       }
     } catch (profileErr) {
       AppLog.error(`[${email}] Error verificant perfil: ${profileErr.message}`);
@@ -67,7 +67,7 @@ const GmailService = (() => {
       });
       const testCount = (testResp.result.messages || []).length;
       const testEstimate = testResp.result.resultSizeEstimate || 0;
-      AppLog.info(`[${email}] ð Test simple (subject:factura has:attachment): ${testCount} missatges, estimaciÃ³: ${testEstimate}`);
+      AppLog.info(`[${email}] 🔍 Test simple (subject:factura has:attachment): ${testCount} missatges, estimació: ${testEstimate}`);
     } catch (testErr) {
       AppLog.error(`[${email}] Error en test simple: ${testErr.message}`);
     }
@@ -91,7 +91,7 @@ const GmailService = (() => {
 
       // DIAGNOSTIC: log raw response on first page
       if (page === 1) {
-        AppLog.info(`[${email}] Resposta API pÃ g 1: ${messages.length} missatges, estimate=${resp.result.resultSizeEstimate}, nextPage=${!!pageToken}`);
+        AppLog.info(`[${email}] Resposta API pàg 1: ${messages.length} missatges, estimate=${resp.result.resultSizeEstimate}, nextPage=${!!pageToken}`);
       }
 
       if (onProgress) {
