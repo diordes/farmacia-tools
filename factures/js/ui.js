@@ -207,11 +207,11 @@ const UI = (() => {
       <td><span class="editable-field" data-key="${inv.dedupKey}" data-field="invoiceNumber" onclick="UI.editField('${inv.dedupKey}','invoiceNumber')" title="Clic per editar núm. factura" style="cursor:pointer;border-bottom:1px dashed var(--text-muted)">${escapeHtml(inv.invoiceNumber || '-')}</span></td>
       <td><span class="editable-field" data-key="${inv.dedupKey}" data-field="amount" onclick="UI.editField('${inv.dedupKey}','amount')" title="Clic per editar import" style="cursor:pointer;border-bottom:1px dashed var(--text-muted)">${inv.amount ? inv.amount + ' €' : '-'}</span></td>
       <td title="${escapeHtml(inv.haciendaName)}">
-        <div class="hacienda-name" data-key="${inv.dedupKey}" onclick="UI.editHaciendaName('${inv.dedupKey}')" title="Clic per editar" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.75rem;cursor:pointer;border-bottom:1px dashed var(--text-muted)">
+        <div class="hacienda-name" data-key="${inv.dedupKey}" onclick="UI.editHaciendaName('${inv.dedupKey}')" title="Clic per editar" >
           ${escapeHtml(inv.haciendaName)}
         </div>
       </td>
-      <td><span class="source-badge">${sourceLabel} ${escapeHtml(inv.accountEmail?.split('@')[0] || inv.source)}</span></td>
+      <td><span class="account-badge" title="${inv.accountEmail || inv.source}">${escapeHtml(inv.accountEmail?.split('@')[0] || inv.source)}</span></td>
       <td class="action-btns">
         ${inv.source === 'gmail' ? `<button class="btn btn-sm btn-outline" onclick="Processor.downloadOne('${inv.dedupKey}')" title="Descarregar amb nom Hisenda">⬇️</button>` : ''}
         ${inv.driveLink ? `<a href="${inv.driveLink}" target="_blank" class="btn btn-sm btn-outline" title="Obrir a Drive">📁</a>` : ''}
