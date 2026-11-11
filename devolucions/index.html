@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Devolucions — Farmàcia Central BCN</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/portal.css">
+  <style>
+    /* —— Devolucions page styles —— */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    .page-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 24px;
+    }
+
+    /* Scanner input area */
+    .scan-area {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .scan-area h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .scan-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .scan-input {
+      flex: 1;
+      font-family: var(--font);
+      font-size: 1.1rem;
+      font-weight: 600;
+      padding: 12px 16px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .scan-input:focus {
+      border-color: var(--accent);
+    }
+    .scan-input::placeholder {
+      color: var(--text-secondary);
+      font-weight: 400;
+      font-size: 0.95rem;
+    }
+    .btn {
+      font-family: var(--font);
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-primary:disabled {
+      background: var(--text-secondary);
+      cursor: not-allowed;
+    }
+    .btn-danger {
+      background: #ef4444;
+      color: #fff;
+    }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.75rem;
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-outline:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Options row */
+    .options-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .option-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .option-group label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+    }
+    .option-group select,
+    .option-group input[type="number"] {
+      font-family: var(--font);
+      font-size: 0.85rem;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .option-group select { min-width: 180px; }
+    .option-group input[type="number"] { width: 70px; }
+
+    /* Product list */
+    .product-list {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .product-list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .product-list-header h3 {
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+    .product-list-empty {
+      padding: 32px 20px;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+    .product-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .product-item:last-child { border-bottom: none; }
+    .product-cn {
+      font-weight: 700;
+      font-size: 0.95rem;
+      font-variant-numeric: tabular-nums;
+      min-width: 70px;
+    }
+    .product-qty {
+      color: var(--text-secondary);
+      min-width: 40px;
+    }
+    .product-reason {
+      flex: 1;
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+    }
+    .product-remove {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 4px;
+      line-height: 1;
+    }
+    .product-remove:hover { color: #ef4444; }
+
+    /* Wholesaler buttons */
+    .wholesaler-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .wholesaler-section h3 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .wholesaler-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    .wholesaler-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      font-family: var(--font);
+      color: var(--text);
+    }
+    .wholesaler-btn:hover {
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+    }
+    .wholesaler-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .wholesaler-btn:disabled:hover {
+      border-color: var(--border);
+      box-shadow: none;
+    }
+    .wholesaler-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.75rem;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .wholesaler-ah { background: #5b2d8e; }
+    .wholesaler-fede { background: #00875a; }
+    .wholesaler-cofares { background: #c41e3a; }
+    .wholesaler-info { flex: 1; text-align: left; }
+    .wholesaler-name {
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+    .wholesaler-desc {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    /* Userscript install section */
+    .install-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .install-section h3 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .install-section p {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .install-steps {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.8;
+      padding-left: 20px;
+      margin-bottom: 12px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+    .status-ok { background: #dcfce7; color: #166534; }
+    .status-missing { background: #fef3c7; color: #92400e; }
+
+    @media (prefers-color-scheme: dark) {
+      .status-ok { background: #14532d; color: #86efac; }
+      .status-missing { background: #78350f; color: #fde68a; }
+    }
+
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--text);
+      color: var(--bg);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      opacity: 0;
+      transition: transform 0.3s, opacity 0.3s;
+      z-index: 1000;
+    }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    @media (max-width: 480px) {
+      .scan-row { flex-direction: column; }
+      .options-row { flex-direction: column; align-items: stretch; }
+      .wholesaler-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="portal">
+    <header>
+      <div class="logo">
+        <span class="logo-icon">💊</span>
+        <div>
+          <h1>Farmàcia Central BCN</h1>
+          <p class="subtitle">Eines internes</p>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <a href="../" class="back-link">← Tornar a Eines</a>
+      <h2 class="page-title">🔄 Devolucions automàtiques</h2>
+
+      <!-- Scanner input -->
+      <div class="scan-area">
+        <h3>Afegir productes</h3>
+        <div class="scan-row">
+          <input type="text" id="cnInput" class="scan-input"
+                 placeholder="Escriu o escaneja el codi nacional (CN)..."
+                 autocomplete="off" inputmode="numeric">
+          <button class="btn btn-primary" onclick="addProduct()" id="addBtn">Afegir</button>
+        </div>
+        <div class="options-row">
+          <div class="option-group">
+            <label>Quantitat</label>
+            <input type="number" id="qtyInput" value="1" min="1" max="99">
+          </div>
+          <div class="option-group">
+            <label>Motiu</label>
+            <select id="reasonSelect">
+              <option value="NO_INTERESA">No interessa</option>
+              <option value="SERVIDO_POR_ERROR">Servit per error</option>
+              <option value="DEFECTUOSO">Defectuós</option>
+              <option value="FECHA_DE_CADUCIDAD">Caducitat</option>
+              <option value="ERROR_DE_PRECIO">Error de preu</option>
+              <option value="OTROS">Altres</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Product list -->
+      <div class="product-list">
+        <div class="product-list-header">
+          <h3>Productes a retornar (<span id="productCount">0</span>)</h3>
+          <button class="btn btn-sm btn-outline" onclick="clearAll()" id="clearBtn" style="display:none">
+            Netejar tot
+          </button>
+        </div>
+        <div id="productListBody">
+          <div class="product-list-empty" id="emptyMsg">
+            Cap producte afegit. Escaneja o escriu un codi nacional.
+          </div>
+        </div>
+      </div>
+
+      <!-- Wholesaler buttons -->
+      <div class="wholesaler-section">
+        <h3>Processar devolucions</h3>
+        <div class="wholesaler-grid">
+          <button class="wholesaler-btn" onclick="processReturn('alliance')" id="btnAlliance" disabled>
+            <div class="wholesaler-icon wholesaler-ah">AH</div>
+            <div class="wholesaler-info">
+              <div class="wholesaler-name">Alliance Healthcare</div>
+              <div class="wholesaler-desc">my.alliance-healthcare.es</div>
+            </div>
+          </button>
+          <button class="wholesaler-btn" onclick="processReturn('fedefarma')" id="btnFedefarma" disabled>
+            <div class="wholesaler-icon wholesaler-fede">FF</div>
+            <div class="wholesaler-info">
+              <div class="wholesaler-name">Fedefarma</div>
+              <div class="wholesaler-desc">Pròximament</div>
+            </div>
+          </button>
+          <button class="wholesaler-btn" onclick="processReturn('cofares')" id="btnCofares" disabled>
+            <div class="wholesaler-icon wholesaler-cofares">CO</div>
+            <div class="wholesaler-info">
+              <div class="wholesaler-name">Cofares</div>
+              <div class="wholesaler-desc">Pròximament</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Userscript install -->
+      <div class="install-section">
+        <h3>⚙️ Configuració (una sola vegada)</h3>
+        <p>L'eina necessita un userscript instal·lat al navegador per poder automatitzar el portal del majorista.</p>
+        <ol class="install-steps">
+          <li>Instal·la <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey</a> al Chrome</li>
+          <li>Clica el botó per instal·lar l'script automàtic:</li>
+        </ol>
+        <a href="auto-devolucions.user.js" class="btn btn-primary" id="installBtn">
+          📥 Instal·lar userscript de devolucions
+        </a>
+        <div style="margin-top: 12px" id="scriptStatus">
+          <span class="status-badge status-missing">⚠ Comprovant script...</span>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <p>Farmàcia Central BCN · C/ Biscaia 313, Barcelona · Eines d'ús intern</p>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // —— State ——
+    let products = [];
+
+    const REASON_LABELS = {
+      'NO_INTERESA': 'No interessa',
+      'SERVIDO_POR_ERROR': 'Servit per error',
+      'DEFECTUOSO': 'Defectuós',
+      'FECHA_DE_CADUCIDAD': 'Caducitat',
+      'ERROR_DE_PRECIO': 'Error de preu',
+      'OTROS': 'Altres'
+    };
+
+    // Portal reason values (must match the portal's dropdown text)
+    const REASON_PORTAL = {
+      'NO_INTERESA': 'NO INTERESA',
+      'SERVIDO_POR_ERROR': 'SERVIDO POR ERROR',
+      'DEFECTUOSO': 'DEFECTUOSO',
+      'FECHA_DE_CADUCIDAD': 'FECHA DE CADUCIDAD',
+      'ERROR_DE_PRECIO': 'ERROR DE PRECIO',
+      'OTROS': 'OTROS'
+    };
+
+    const PORTAL_URLS = {
+      alliance: 'https://my.alliance-healthcare.es/group/pro/devoluciones'
+      // fedefarma and cofares will be added later
+    };
+
+    // —— Input handling ——
+    const cnInput = document.getElementById('cnInput');
+    const qtyInput = document.getElementById('qtyInput');
+    const reasonSelect = document.getElementById('reasonSelect');
+
+    cnInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addProduct();
+      }
+    });
+
+    // Auto-focus on load
+    cnInput.focus();
+
+    function addProduct() {
+      const cn = cnInput.value.trim().replace(/\D/g, '');
+      if (!cn) return;
+
+      // Check for duplicates
+      if (products.some(p => p.cn === cn)) {
+        showToast('⚠ Aquest CN ja està a la llista');
+        cnInput.value = '';
+        cnInput.focus();
+        return;
+      }
+
+      const qty = parseInt(qtyInput.value) || 1;
+      const reason = reasonSelect.value;
+
+      products.push({ cn, qty, reason });
+      renderList();
+      cnInput.value = '';
+      qtyInput.value = '1';
+      cnInput.focus();
+      showToast('✓ CN ' + cn + ' afegit');
+    }
+
+    function removeProduct(index) {
+      products.splice(index, 1);
+      renderList();
+    }
+
+    function clearAll() {
+      if (!confirm('Segur que vols netejar tota la llista?')) return;
+      products = [];
+      renderList();
+    }
+
+    function renderList() {
+      const body = document.getElementById('productListBody');
+      const count = document.getElementById('productCount');
+      const clearBtn = document.getElementById('clearBtn');
+      const emptyMsg = document.getElementById('emptyMsg');
+      const btnAlliance = document.getElementById('btnAlliance');
+
+      count.textContent = products.length;
+      clearBtn.style.display = products.length > 0 ? '' : 'none';
+      btnAlliance.disabled = products.length === 0;
+
+      if (products.length === 0) {
+        body.innerHTML = '<div class="product-list-empty" id="emptyMsg">Cap producte afegit. Escaneja o escriu un codi nacional.</div>';
+        return;
+      }
+
+      body.innerHTML = products.map((p, i) => 
+        '<div class="product-item">' +
+          '<span class="product-cn">' + p.cn + '</span>' +
+          '<span class="product-qty">×' + p.qty + '</span>' +
+          '<span class="product-reason">' + REASON_LABELS[p.reason] + '</span>' +
+          '<button class="product-remove" onclick="removeProduct(' + i + ')" title="Eliminar">✕</button>' +
+        '</div>'
+      ).join('');
+    }
+
+    // —— Process return ——
+    function processReturn(wholesaler) {
+      if (products.length === 0) return;
+
+      const url = PORTAL_URLS[wholesaler];
+      if (!url) {
+        showToast('⚠ Majorista no disponible encara');
+        return;
+      }
+
+      // Encode products as URL parameter
+      // Format: cn:qty:reason,cn:qty:reason,...
+      const encoded = products.map(p =>
+        p.cn + ':' + p.qty + ':' + REASON_PORTAL[p.reason]
+      ).join(',');
+
+      const returnUrl = url + '?farmacia_auto_return=' + encodeURIComponent(encoded) + '#/requests/products';
+
+      // Open portal in new tab
+      window.open(returnUrl, '_blank');
+      showToast('🚀 Portal obert — l\'script processarà les devolucions');
+    }
+
+    // —— Userscript detection ——
+    function checkUserscript() {
+      const el = document.getElementById('scriptStatus');
+      // The userscript sets a flag on the page when present
+      if (window.__FARMACIA_DEVOLUCIONS_SCRIPT__) {
+        el.innerHTML = '<span class="status-badge status-ok">✓ Script instal·lat</span>';
+      } else {
+        el.innerHTML = '<span class="status-badge status-missing">⚠ Script no detectat — instal·la\'l per automatitzar</span>';
+      }
+    }
+
+    // Check after a short delay (userscript may load async)
+    setTimeout(checkUserscript, 1000);
+    // Listen for userscript announcing itself
+    window.addEventListener('farmacia-devolucions-ready', checkUserscript);
+
+    // —— Toast ——
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toast._timeout);
+      toast._timeout = setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
+    // —— Persist state in localStorage ——
+    function saveState() {
+      try { localStorage.setItem('farmacia_devolucions', JSON.stringify(products)); } catch(e) {}
+    }
+    function loadState() {
+      try {
+        const saved = localStorage.getItem('farmacia_devolucions');
+        if (saved) products = JSON.parse(saved);
+      } catch(e) {}
+    }
+
+    // Auto-save on changes
+    const origRender = renderList;
+    renderList = function() {
+      origRender();
+      saveState();
+    };
+
+    // Load saved state
+    loadState();
+    renderList();
+  </script>
+</body>
+  </html>
