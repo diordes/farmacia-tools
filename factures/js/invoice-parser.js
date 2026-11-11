@@ -1,21 +1,21 @@
 /* ============================================================
-   InvoiceParser â Extract invoice number, amount, generate
+   InvoiceParser — Extract invoice number, amount, generate
    Hacienda-compliant filenames
    ============================================================ */
 const InvoiceParser = (() => {
 
   // Patterns for invoice numbers
   const INVOICE_NUM_PATTERNS = [
-    /(?:factura|fra|invoice|fv|nc|ab|n[ÂºoÂ°]?\s*factura)[\s.:_#nÂºÂ°-]*([A-Z0-9][\w\/-]{3,25})/i,
-    /(?:nÂº|num|nÃºmero|numero|n\.)[\s.:_-]*([A-Z0-9][\w\/-]{3,20})/i,
+    /(?:factura|fra|invoice|fv|nc|ab|n[ºo°]?\s*factura)[\s.:_#nº°-]*([A-Z0-9][\w\/-]{3,25})/i,
+    /(?:nº|num|número|numero|n\.)[\s.:_-]*([A-Z0-9][\w\/-]{3,20})/i,
     /\b([A-Z]{1,4}[-\/]?\d{4,12})\b/,     // FV-2026001, NC260401
     /\b(\d{4,6}[-\/]\d{4,8})\b/,           // 2026/12345
   ];
 
   // Patterns for amounts
   const AMOUNT_PATTERNS = [
-    /([\d.,]+)\s*â¬/,
-    /â¬\s*([\d.,]+)/,
+    /([\d.,]+)\s*€/,
+    /€\s*([\d.,]+)/,
     /total[:\s]*([\d.,]+)/i,
     /importe[:\s]*([\d.,]+)/i,
     /import[:\s]*([\d.,]+)/i,
@@ -51,8 +51,8 @@ const InvoiceParser = (() => {
   }
 
   function normalizeAmount(str) {
-    // Handle European format: 1.234,56 â 1234.56
-    // Handle US format: 1,234.56 â 1234.56
+    // Handle European format: 1.234,56 → 1234.56
+    // Handle US format: 1,234.56 → 1234.56
     let s = str.trim();
 
     // If has both . and , the last one is decimal separator
@@ -98,7 +98,7 @@ const InvoiceParser = (() => {
 
     // Amount
     if (amount) {
-      parts.push(amount + 'â¬');
+      parts.push(amount + '€');
     }
 
     let name = parts.join('_') + '.' + ext;
