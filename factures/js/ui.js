@@ -178,7 +178,7 @@ const UI = (() => {
       <td class="action-btns">
         ${inv.source === 'gmail' ? `<button class="btn btn-sm btn-outline" onclick="Processor.downloadOne('${inv.dedupKey}')" title="Descarregar amb nom Hisenda">⬇️</button>` : ''}
         ${inv.driveLink ? `<a href="${inv.driveLink}" target="_blank" class="btn btn-sm btn-outline" title="Obrir a Drive">📁</a>` : ''}
-        ${inv.status === 'duplicate' && inv.dupReason ? `<span title="${escapeHtml(inv.dupReason)}" style="cursor:help">ℹ️</span>` : ''}
+        ${inv.status === 'duplicate' && inv.dupReason ? `<div class="dup-reason" style="font-size:0.7rem;color:var(--warning,#e67e22);max-width:180px;line-height:1.2;margin-top:2px">🔁 ${escapeHtml(inv.dupReason)}</div>` : ''}
       </td>
     `;
     return tr;
