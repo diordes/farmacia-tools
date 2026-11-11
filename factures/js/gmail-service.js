@@ -146,6 +146,16 @@ const GmailService = (() => {
 
     const fromEmail = extractEmailFromHeader(headers.from || '');
 
+    // Extract body text for better invoice number/amount extraction
+    let bodyText = '';
+    try {
+      bodyText = extractBodyText(msg.payload);
+      // Limit to first 5000 chars to avoid memory issues
+      if (bodyText.length > 5000) bodyText = bodyText.substring(0, 5000);
+    } catch (e) {
+      console.warn('Error extracting body text:', e);
+    }
+
     return {
       id: messageId,
       accountEmail: email,
@@ -156,8 +166,53 @@ const GmailService = (() => {
       parsedDate: parseDate(headers.date),
       supplier: Suppliers.getSupplierName(fromEmail, headers.from),
       attachments,
+      bodyText,
       source: 'gmail'
     };
+  }
+
+  // Extract plain text body from MIME structure
+  function extractBodyText(part) {
+    if (!part) return '';
+
+    // Prefer text/plain
+    if (part.mimeType === 'text/plain' && part.body?.data) {
+      try {
+        const raw = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
+        const bytes = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+        return new TextDecoder('utf-8').decode(bytes);
+      } catch { return ''; }
+    }
+
+    // Fall back to text/html — strip tags
+    if (part.mimeType === 'text/html' && part.body?.data) {
+      try {
+        const raw = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
+        const bytes = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+        const html = new TextDecoder('utf-8').decode(bytes);
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        return div.textContent || '';
+      } catch { return ''; }
+    }
+
+    // Recurse into sub-parts (multipart/alternative, multipart/mixed, etc.)
+    if (part.parts) {
+      // First pass: look for text/plain
+      for (const p of part.parts) {
+        if (p.mimeType === 'text/plain' && p.body?.data) {
+          const t = extractBodyText(p);
+          if (t) return t;
+        }
+      }
+      // Second pass: look for text/html or nested multipart
+      for (const p of part.parts) {
+        const t = extractBodyText(p);
+        if (t) return t;
+      }
+    }
+
+    return '';
   }
 
   // Recursively extract attachment info from MIME parts
