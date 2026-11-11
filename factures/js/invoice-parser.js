@@ -49,7 +49,7 @@ const InvoiceParser = (() => {
         const match = text.match(pattern);
         if (match && match[1]) {
           const num = match[1].trim();
-          if (num.length >= 3 && !/^0+$/.test(num)) {
+          if (num.length >= 3 && !/^0+$/.test(num) && /\d/.test(num)) {
             return num;
           }
         }
@@ -62,7 +62,7 @@ const InvoiceParser = (() => {
         const match = bodyText.match(pattern);
         if (match && match[1]) {
           const num = match[1].trim();
-          if (num.length >= 3 && !/^0+$/.test(num) && !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(num)) {
+          if (num.length >= 3 && !/^0+$/.test(num) && /\d/.test(num) && !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(num)) {
             return num;
           }
         }
