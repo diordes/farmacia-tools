@@ -4,7 +4,7 @@
    ============================================================ */
 const InvoiceParser = (() => {
 
-  // Patterns for invoice numbers
+  // Patterns for invoice numbers (subject + filename)
   const INVOICE_NUM_PATTERNS = [
     /(?:factura|fra|invoice|fv|nc|ab|n[ºo°]?\s*factura)[\s.:_#nº°-]*([A-Z0-9][\w\/-]{3,25})/i,
     /(?:nº|num|número|numero|n\.)[\s.:_-]*([A-Z0-9][\w\/-]{3,20})/i,
@@ -12,7 +12,16 @@ const InvoiceParser = (() => {
     /\b(\d{4,6}[-\/]\d{4,8})\b/,           // 2026/12345
   ];
 
-  // Patterns for amounts
+  // Extra patterns for invoice numbers in email body (more specific to avoid false positives)
+  const BODY_INVOICE_NUM_PATTERNS = [
+    /(?:n(?:º|°|úmero|umero)?\.?\s*(?:de\s+)?factura|invoice\s*(?:no|number|#|num)|factura\s*(?:no|n[ºo°]|#|num))[\s.:_#nº°-]*([A-Z0-9][\w\/-]{3,25})/i,
+    /(?:fra|fv|nc|ab)[\s.:_#-]*([A-Z0-9][\w\/-]{3,25})/i,
+    /(?:documento|document|referencia|referència|ref)[\s.:_#-]*([A-Z0-9][\w\/-]{4,25})/i,
+    /(?:su factura|la factura|your invoice|invoice)\s+(?:n[ºo°.]?\s*)?([A-Z0-9][\w\/-]{3,25})/i,
+    /\b([A-Z]{1,4}[-\/]\d{4,12})\b/,       // FV-2026001 (require dash/slash in body)
+  ];
+
+  // Patterns for amounts (subject + filename)
   const AMOUNT_PATTERNS = [
     /([\d.,]+)\s*€/,
     /€\s*([\d.,]+)/,
@@ -22,24 +31,49 @@ const InvoiceParser = (() => {
     /amount[:\s]*([\d.,]+)/i,
   ];
 
-  function extractInvoiceNumber(subject, filename) {
+  // Extra patterns for amounts in email body (require label to avoid random numbers)
+  const BODY_AMOUNT_PATTERNS = [
+    /(?:total\s*(?:factura|fra|invoice|general|iva\s*incl[oòó]s|a\s*pagar|document)?)[\s.:]*?([\d.,]+)\s*€/i,
+    /(?:total\s*(?:factura|fra|invoice|general|iva\s*incl[oòó]s|a\s*pagar|document)?)[\s.:]*?€\s*([\d.,]+)/i,
+    /(?:importe\s*total|import\s*total|montant\s*total|grand\s*total|net\s*a\s*pagar)[\s.:]*?([\d.,]+)\s*€?/i,
+    /(?:base\s*imponible|base\s*imposable|subtotal)[\s.:]*?([\d.,]+)\s*€?/i,
+    /(?:total\s*iva\s*incl)[\s.:]*?([\d.,]+)\s*€?/i,
+    /([\d.,]+)\s*€\s*(?:\(?iva\s*incl|\(?total)/i,
+  ];
+
+  function extractInvoiceNumber(subject, filename, bodyText) {
+    // First try subject and filename with standard patterns
     const texts = [subject || '', filename || ''];
     for (const text of texts) {
       for (const pattern of INVOICE_NUM_PATTERNS) {
         const match = text.match(pattern);
         if (match && match[1]) {
           const num = match[1].trim();
-          // Filter out false positives (too short or all zeros)
           if (num.length >= 3 && !/^0+$/.test(num)) {
             return num;
           }
         }
       }
     }
+
+    // Then try body text with more specific patterns
+    if (bodyText) {
+      for (const pattern of BODY_INVOICE_NUM_PATTERNS) {
+        const match = bodyText.match(pattern);
+        if (match && match[1]) {
+          const num = match[1].trim();
+          if (num.length >= 3 && !/^0+$/.test(num) && !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(num)) {
+            return num;
+          }
+        }
+      }
+    }
+
     return '';
   }
 
-  function extractAmount(subject, filename) {
+  function extractAmount(subject, filename, bodyText) {
+    // First try subject and filename
     const text = (subject || '') + ' ' + (filename || '');
     for (const pattern of AMOUNT_PATTERNS) {
       const match = text.match(pattern);
@@ -47,6 +81,21 @@ const InvoiceParser = (() => {
         return normalizeAmount(match[1]);
       }
     }
+
+    // Then try body text with labeled patterns (avoid random numbers)
+    if (bodyText) {
+      for (const pattern of BODY_AMOUNT_PATTERNS) {
+        const match = bodyText.match(pattern);
+        if (match && match[1]) {
+          const amt = normalizeAmount(match[1]);
+          // Sanity check: skip amounts that are obviously wrong (0 or > 1M)
+          if (amt && parseFloat(amt) > 0 && parseFloat(amt) < 1000000) {
+            return amt;
+          }
+        }
+      }
+    }
+
     return '';
   }
 
@@ -112,8 +161,8 @@ const InvoiceParser = (() => {
     const invoices = [];
 
     for (const att of (msg.attachments || [])) {
-      const invoiceNum = extractInvoiceNumber(msg.subject, att.filename);
-      const amount = extractAmount(msg.subject, att.filename);
+      const invoiceNum = extractInvoiceNumber(msg.subject, att.filename, msg.bodyText);
+      const amount = extractAmount(msg.subject, att.filename, msg.bodyText);
       const date = msg.parsedDate || '';
 
       const haciendaName = generateHaciendaName(
