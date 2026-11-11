@@ -410,4 +410,30 @@ th:first-child, td:first-child { width: 36px; text-align: center; }
   .action-bar { flex-direction: column; align-items: stretch; }
 }
 
+/* Hacienda name - allow wrapping */
+.hacienda-name {
+  font-family: monospace;
+  font-size: 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px dashed var(--text-muted);
+  word-break: break-all;
+  line-height: 1.3;
+  min-width: 180px;
+}
+
+/* Account badge */
+.account-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  background: var(--info-bg);
+  color: var(--primary);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hidden { display: none !important; }
