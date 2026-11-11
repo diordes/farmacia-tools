@@ -4,6 +4,41 @@
 const UI = (() => {
 
   let allInvoices = []; // Master list of all found invoices
+  const STORAGE_KEY = 'factures_invoices_v1';
+
+  // Persist invoices to localStorage
+  function saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(allInvoices));
+    } catch (e) { /* quota exceeded or private mode */ }
+  }
+
+  // Restore invoices from localStorage on page load
+  function restoreFromStorage() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (data) {
+        const invoices = JSON.parse(data);
+        if (Array.isArray(invoices) && invoices.length > 0) {
+          renderResults(invoices);
+          AppLog.info(`Restaurades ${invoices.length} factures de la sessió anterior`);
+          return true;
+        }
+      }
+    } catch (e) { /* corrupt data */ }
+    return false;
+  }
+
+  // Clear saved invoices
+  function clearSavedInvoices() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    allInvoices = [];
+    const body = document.getElementById('results-body');
+    if (body) body.innerHTML = '';
+    document.getElementById('stats-row')?.classList.add('hidden');
+    document.getElementById('filters-row')?.classList.add('hidden');
+    AppLog.info('Resultats esborrats');
+  }
 
   function togglePanel(name) {
     const panel = document.getElementById('panel-' + name);
@@ -132,6 +167,7 @@ const UI = (() => {
             </div>
           </td>
         </tr>`;
+      saveToStorage();
       return;
     }
 
@@ -144,6 +180,7 @@ const UI = (() => {
 
     updateStats();
     updateFilterOptions();
+    saveToStorage();
   }
 
   function createInvoiceRow(inv) {
@@ -196,6 +233,7 @@ const UI = (() => {
     body.appendChild(createInvoiceRow(inv));
     document.getElementById('stats-row')?.classList.remove('hidden');
     document.getElementById('filters-row')?.classList.remove('hidden');
+    saveToStorage();
   }
 
   function updateInvoiceRow(inv) {
@@ -408,6 +446,7 @@ const UI = (() => {
     }
     updateStats();
 
+    saveToStorage();
     AppLog.info(`Camp ${labels[field]} editat: ${trimmed} \u2192 Nom Hisenda: ${inv.haciendaName}`);
   }
 
@@ -427,6 +466,7 @@ const UI = (() => {
       cell.title = inv.haciendaName;
     }
 
+    saveToStorage();
     AppLog.info(`Nom Hisenda editat: ${inv.haciendaName}`);
   }
 
@@ -440,5 +480,7 @@ const UI = (() => {
     renderResults, addInvoiceRow, updateInvoiceRow, updateStats,
     applyFilters, clearFilters, getSelectedInvoices, toggleSelectAll, getAllInvoices,
     editField, editHaciendaName, updateDriveAccountSelector
-  };
+  ,
+    restoreFromStorage,
+    clearSavedInvoices};
 })();
