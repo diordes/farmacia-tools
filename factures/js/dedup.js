@@ -1,5 +1,5 @@
 /* ============================================================
-   Dedup — Deduplication of invoices across accounts and sources
+   Dedup â Deduplication of invoices across accounts and sources
    ============================================================ */
 const Dedup = (() => {
 
@@ -39,7 +39,7 @@ const Dedup = (() => {
   // Returns { unique: [], duplicates: [] }
   function deduplicate(invoices) {
     const processed = loadProcessed();
-    const seen = new Map(); // dedupKey → first invoice
+    const seen = new Map(); // dedupKey â first invoice
     const unique = [];
     const duplicates = [];
 
@@ -93,7 +93,7 @@ const Dedup = (() => {
     const n1 = norm(name1);
     const n2 = norm(name2);
 
-    // Only exact match after normalization (no fuzzy includes — too aggressive)
+    // Only exact match after normalization (no fuzzy includes â too aggressive)
     return n1 === n2;
   }
 
