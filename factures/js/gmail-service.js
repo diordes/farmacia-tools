@@ -1,28 +1,36 @@
 /* ============================================================
-   GmailService — Search and download invoices from Gmail
+   GmailService â Search and download invoices from Gmail
    ============================================================ */
 const GmailService = (() => {
 
   // Search terms that indicate an invoice
   const INVOICE_TERMS = [
     'factura', 'invoice', 'fra ', 'fra.', 'fra:', 'fra/',
-    'nota de crèdit', 'nota de credito', 'abono', 'credit note',
-    'facturación', 'facturació'
+    'nota de crÃ¨dit', 'nota de credito', 'abono', 'credit note',
+    'facturaciÃ³n', 'facturaciÃ³', 'liquidaciÃ³n', 'liquidaciÃ³',
+    'rectificativa', 'cargo', 'adeudo'
   ];
 
   // Terms to EXCLUDE (not invoices!)
   const EXCLUDE_TERMS = [
     'aviso de pago', 'avis de pagament',
-    'confirmación de pedido', 'confirmació de comanda',
-    'albarán', 'albarà',
+    'confirmaciÃ³n de pedido', 'confirmaciÃ³ de comanda',
+    'albarÃ¡n', 'albarÃ ',
     'presupuesto', 'pressupost',
     'acuerdo comercial', 'acord comercial'
+  ];
+
+  // Filename patterns for invoice attachments
+  const INVOICE_FILENAMES = [
+    'factura', 'invoice', 'fra_', 'fra-', 'facture', 'rechnung',
+    'liquidacion', 'liquidaciÃ³', 'nota_credito', 'rectificativa'
   ];
 
   // Build Gmail search query
   function buildQuery(afterDate, beforeDate) {
     const subjectTerms = INVOICE_TERMS.map(t => `subject:"${t}"`).join(' OR ');
-    let query = `(${subjectTerms}) has:attachment`;
+    const fileTerms = INVOICE_FILENAMES.map(t => `filename:${t}`).join(' OR ');
+    let query = `(${subjectTerms} OR ${fileTerms}) has:attachment`;
     if (afterDate) query += ` after:${afterDate}`;
     if (beforeDate) query += ` before:${beforeDate}`;
     return query;
@@ -34,8 +42,35 @@ const GmailService = (() => {
       throw new Error('No s\'ha pogut activar el compte ' + email);
     }
 
+    // DIAGNOSTIC: verify which account the API actually sees
+    try {
+      const profile = await gapi.client.gmail.users.getProfile({ userId: 'me' });
+      const realEmail = profile.result.emailAddress;
+      if (realEmail !== email) {
+        AppLog.error(`â ï¸ TOKEN INCORRECTE! VolÃ­em ${email} perÃ² l'API veu ${realEmail}`);
+      } else {
+        AppLog.info(`[${email}] â Token verificat â API veu ${realEmail} (${profile.result.messagesTotal} missatges totals)`);
+      }
+    } catch (profileErr) {
+      AppLog.error(`[${email}] Error verificant perfil: ${profileErr.message}`);
+    }
+
     const query = buildQuery(afterDate, beforeDate);
     AppLog.info(`[${email}] Cercant: ${query}`);
+
+    // DIAGNOSTIC: also try a simple query to see if the API works at all
+    try {
+      const testResp = await gapi.client.gmail.users.messages.list({
+        userId: 'me',
+        q: 'subject:factura has:attachment',
+        maxResults: 5
+      });
+      const testCount = (testResp.result.messages || []).length;
+      const testEstimate = testResp.result.resultSizeEstimate || 0;
+      AppLog.info(`[${email}] ð Test simple (subject:factura has:attachment): ${testCount} missatges, estimaciÃ³: ${testEstimate}`);
+    } catch (testErr) {
+      AppLog.error(`[${email}] Error en test simple: ${testErr.message}`);
+    }
 
     const results = [];
     let pageToken = null;
@@ -53,6 +88,11 @@ const GmailService = (() => {
       const messages = resp.result.messages || [];
       pageToken = resp.result.nextPageToken;
       page++;
+
+      // DIAGNOSTIC: log raw response on first page
+      if (page === 1) {
+        AppLog.info(`[${email}] Resposta API pÃ g 1: ${messages.length} missatges, estimate=${resp.result.resultSizeEstimate}, nextPage=${!!pageToken}`);
+      }
 
       if (onProgress) {
         onProgress({
