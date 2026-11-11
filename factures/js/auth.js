@@ -1,5 +1,5 @@
 /* ============================================================
-   Auth â Google OAuth2 multi-account management
+   Auth — Google OAuth2 multi-account management
    ============================================================ */
 const Auth = (() => {
   const SCOPES = [
@@ -16,7 +16,7 @@ const Auth = (() => {
   let gisInited = false;
   let pendingResolve = null;
 
-  // Load saved accounts (email â {email, accessToken, expiresAt})
+  // Load saved accounts (email → {email, accessToken, expiresAt})
   function loadAccounts() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -47,7 +47,7 @@ const Auth = (() => {
   async function init() {
     const clientId = Config.get('clientId');
     if (!clientId) {
-      AppLog.info('No hi ha Client ID configurat. Ves a âï¸ ConfiguraciÃ³.');
+      AppLog.info('No hi ha Client ID configurat. Ves a ⚙️ Configuració.');
       return;
     }
 
@@ -61,7 +61,7 @@ const Auth = (() => {
         gapi.load('client', async () => {
           try {
             await gapi.client.init({
-              // Don't set apiKey here â we use OAuth tokens
+              // Don't set apiKey here — we use OAuth tokens
             });
             await gapi.client.load('gmail', 'v1');
             await gapi.client.load('drive', 'v3');
@@ -93,7 +93,7 @@ const Auth = (() => {
   function handleTokenResponse(resp) {
     console.log('[Auth] Token response received:', Object.keys(resp));
     if (resp.error) {
-      const msg = 'Error d\'autenticaciÃ³: ' + resp.error + (resp.error_description ? ' â ' + resp.error_description : '');
+      const msg = 'Error d\'autenticació: ' + resp.error + (resp.error_description ? ' — ' + resp.error_description : '');
       AppLog.error(msg);
       console.error('[Auth]', msg);
       if (pendingResolve) { pendingResolve(null); pendingResolve = null; }
@@ -126,14 +126,14 @@ const Auth = (() => {
       UI.updateAccountsBar();
       UI.updateScanButtons();
       UI.updateDriveAccountSelector && UI.updateDriveAccountSelector();
-      AppLog.success('â Compte connectat: ' + email);
-      alert('â Compte connectat: ' + email);
+      AppLog.success('✅ Compte connectat: ' + email);
+      alert('✅ Compte connectat: ' + email);
 
       if (pendingResolve) { pendingResolve(email); pendingResolve = null; }
     })
     .catch(e => {
-      AppLog.error('â Error obtenint info del compte: ' + e.message);
-      alert('â Error connectant compte: ' + e.message + '\n\nComprova que el compte estigui a la llista de "Test users" a Google Cloud Console.');
+      AppLog.error('❌ Error obtenint info del compte: ' + e.message);
+      alert('❌ Error connectant compte: ' + e.message + '\n\nComprova que el compte estigui a la llista de "Test users" a Google Cloud Console.');
       console.error('[Auth] userinfo fetch failed:', e);
       if (pendingResolve) { pendingResolve(null); pendingResolve = null; }
     });
@@ -143,7 +143,7 @@ const Auth = (() => {
     const msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
     console.error('[Auth] OAuth error callback:', err);
     if (err && err.type === 'popup_closed') {
-      AppLog.warn('â ï¸ S\'ha tancat la finestra d\'autenticaciÃ³. Torna a provar.');
+      AppLog.warn('⚠️ S\'ha tancat la finestra d\'autenticació. Torna a provar.');
     } else {
       AppLog.error('Error OAuth: ' + msg);
     }
@@ -153,7 +153,7 @@ const Auth = (() => {
   async function addAccount(loginHint) {
     const clientId = Config.get('clientId');
     if (!clientId) {
-      alert('â ï¸ Primer configura el Client ID de Google Cloud a âï¸ ConfiguraciÃ³');
+      alert('⚠️ Primer configura el Client ID de Google Cloud a ⚙️ Configuració');
       return;
     }
 
@@ -162,21 +162,21 @@ const Auth = (() => {
     }
 
     if (!tokenClient) {
-      alert('â ï¸ No s\'ha pogut inicialitzar l\'autenticaciÃ³. Revisa el Client ID.');
+      alert('⚠️ No s\'ha pogut inicialitzar l\'autenticació. Revisa el Client ID.');
       return;
     }
 
-    AppLog.info('ð Obrint finestra d\'autenticaciÃ³ de Google...');
+    AppLog.info('🔐 Obrint finestra d\'autenticació de Google...');
 
     return new Promise(resolve => {
       pendingResolve = resolve;
       const opts = {};
       if (loginHint) {
-        // Reconnecting â silent refresh (no popup, app already authorized)
+        // Reconnecting — silent refresh (no popup, app already authorized)
         opts.login_hint = loginHint;
         opts.prompt = '';
       } else {
-        // New account â show picker
+        // New account — show picker
         opts.prompt = 'select_account';
       }
       tokenClient.requestAccessToken(opts);
