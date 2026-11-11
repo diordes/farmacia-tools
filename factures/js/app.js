@@ -140,5 +140,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     AppLog.info('No hi ha Client ID configurat. Ves a ⚙️ Configuració per començar.');
   }
 
+  // Restore previous scan results if available
+  if (UI.restoreFromStorage()) {
+    UI.updateScanButtons();
+  }
+
   AppLog.info('Factures Tool llest!');
 });
