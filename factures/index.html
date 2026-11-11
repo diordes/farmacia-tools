@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Factures Tool â FarmÃ cia Central BCN</title>
+  <title>Factures Tool — Farmàcia Central BCN</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,13 +13,13 @@
     <!-- Header -->
     <header>
       <div class="header-left">
-        <a href="../" style="text-decoration:none;color:inherit;font-size:1.5rem;margin-right:8px" title="Tornar al portal">â</a>
-        <h1>ð Factures Tool</h1>
-        <span class="badge">FarmÃ cia Central BCN</span>
+        <a href="../" style="text-decoration:none;color:inherit;font-size:1.5rem;margin-right:8px" title="Tornar al portal">←</a>
+        <h1>📄 Factures Tool</h1>
+        <span class="badge">Farmàcia Central BCN</span>
         <span class="badge" style="background:var(--text-muted);font-size:0.65rem;opacity:0.7">v2.1</span>
       </div>
       <div class="header-right">
-        <button id="btn-settings" class="btn btn-ghost" onclick="UI.togglePanel('settings')">âï¸ ConfiguraciÃ³</button>
+        <button id="btn-settings" class="btn btn-ghost" onclick="UI.togglePanel('settings')">⚙️ Configuració</button>
         <div id="accounts-bar"></div>
       </div>
     </header>
@@ -27,45 +27,45 @@
     <!-- Settings Panel (hidden by default) -->
     <div id="panel-settings" class="panel hidden">
       <div class="panel-header">
-        <h2>âï¸ ConfiguraciÃ³</h2>
-        <button class="btn btn-ghost" onclick="UI.togglePanel('settings')">â</button>
+        <h2>⚙️ Configuració</h2>
+        <button class="btn btn-ghost" onclick="UI.togglePanel('settings')">✕</button>
       </div>
       <div class="panel-body">
         <section>
           <h3>Google Cloud OAuth</h3>
-          <p class="help-text">Necessites un projecte a <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a> amb Gmail API i Drive API activades, i un OAuth Client ID per a aplicaciÃ³ web.</p>
+          <p class="help-text">Necessites un projecte a <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a> amb Gmail API i Drive API activades, i un OAuth Client ID per a aplicació web.</p>
           <label>Client ID</label>
           <input type="text" id="input-client-id" placeholder="xxxxxx.apps.googleusercontent.com" />
-          <label>API Key (opcional, per cerca pÃºblica)</label>
+          <label>API Key (opcional, per cerca pública)</label>
           <input type="text" id="input-api-key" placeholder="AIzaSy..." />
-          <button class="btn btn-primary" onclick="Config.save()">ð¾ Guardar</button>
+          <button class="btn btn-primary" onclick="Config.save()">💾 Guardar</button>
         </section>
 
         <section>
           <h3>Comptes Gmail</h3>
-          <p class="help-text">Connecta un o mÃ©s comptes de Gmail. Cada compte tindrÃ  accÃ©s a Gmail i Drive.</p>
+          <p class="help-text">Connecta un o més comptes de Gmail. Cada compte tindrà accés a Gmail i Drive.</p>
           <div id="accounts-list"></div>
-          <button class="btn btn-success" onclick="Auth.addAccount()">â Afegir compte Gmail</button>
-          <button class="btn btn-outline" onclick="Auth.reconnectAll().then(() => UI.updateAccountsList())">ð Reconnectar tots els expirats</button>
+          <button class="btn btn-success" onclick="Auth.addAccount()">➕ Afegir compte Gmail</button>
+          <button class="btn btn-outline" onclick="Auth.reconnectAll().then(() => UI.updateAccountsList())">🔄 Reconnectar tots els expirats</button>
         </section>
 
         <section>
           <h3>Fonts externes (webs)</h3>
-          <p class="help-text">Afegeix webs de proveÃ¯dors per buscar factures (Amazon, portals de proveÃ¯dors, etc.). Per a webs externes, puja els PDFs manualment o configura l'accÃ©s.</p>
+          <p class="help-text">Afegeix webs de proveïdors per buscar factures (Amazon, portals de proveïdors, etc.). Per a webs externes, puja els PDFs manualment o configura l'accés.</p>
           <div id="sources-list"></div>
-          <button class="btn btn-outline" onclick="Sources.addSource()">â Afegir font web</button>
+          <button class="btn btn-outline" onclick="Sources.addSource()">➕ Afegir font web</button>
         </section>
 
         <section>
-          <h3>Carpeta Drive destÃ­</h3>
-          <label>Compte Drive destÃ­ (on es pugen TOTES les factures)</label>
-          <select id="input-drive-account" onchange="Config.set('driveAccount', this.value); AppLog.info('Drive destÃ­: ' + (this.value || 'mateix que origen'))">
+          <h3>Carpeta Drive destí</h3>
+          <label>Compte Drive destí (on es pugen TOTES les factures)</label>
+          <select id="input-drive-account" onchange="Config.set('driveAccount', this.value); AppLog.info('Drive destí: ' + (this.value || 'mateix que origen'))">
             <option value="">Mateix compte que l'origen</option>
           </select>
           <p class="help-text">Selecciona un compte connectat. Totes les factures (de qualsevol Gmail) es pujaran a aquest Drive.</p>
           <label>Nom de la carpeta arrel</label>
           <input type="text" id="input-drive-folder" value="Factures {YEAR}" onchange="Config.set('driveFolderName', this.value.trim())" />
-          <p class="help-text">{YEAR} es substitueix automÃ ticament per l'any actual (2026, 2027...)</p>
+          <p class="help-text">{YEAR} es substitueix automàticament per l'any actual (2026, 2027...)</p>
           <label>Mesos enrere a buscar (per defecte)</label>
           <input type="number" id="input-months-back" value="3" min="1" max="24" onchange="Config.set('monthsBack', parseInt(this.value) || 3)" />
         </section>
@@ -73,14 +73,14 @@
         <section>
           <h3>Historial de duplicats</h3>
           <p class="help-text">L'eina recorda les factures ja processades per no repetir-les. Si vols tornar a escanejar-ho tot de nou, esborra l'historial.</p>
-          <button class="btn btn-outline" onclick="Dedup.clearHistory(); alert('â Historial esborrat. Ara pots tornar a buscar.')">ðï¸ Esborrar historial de duplicats</button>
+          <button class="btn btn-outline" onclick="Dedup.clearHistory(); alert('✅ Historial esborrat. Ara pots tornar a buscar.')">🗑️ Esborrar historial de duplicats</button>
         </section>
 
         <section>
-          <h3>ProveÃ¯dors coneguts</h3>
-          <p class="help-text">Mapa email â nom proveÃ¯dor. Es fa servir per normalitzar noms als fitxers.</p>
+          <h3>Proveïdors coneguts</h3>
+          <p class="help-text">Mapa email → nom proveïdor. Es fa servir per normalitzar noms als fitxers.</p>
           <textarea id="input-suppliers" rows="8" placeholder='{"facturasprim@prim.es": "PRIM", ...}'></textarea>
-          <button class="btn btn-outline" onclick="Suppliers.save()">ð¾ Guardar proveÃ¯dors</button>
+          <button class="btn btn-outline" onclick="Suppliers.save()">💾 Guardar proveïdors</button>
         </section>
       </div>
     </div>
@@ -91,25 +91,25 @@
       <div class="action-bar">
         <div class="action-left">
           <button id="btn-scan" class="btn btn-primary btn-lg" onclick="Scanner.startScan()" disabled>
-            ð Buscar factures
+            🔍 Buscar factures
           </button>
           <button id="btn-scan-custom" class="btn btn-outline" onclick="Scanner.customScan()" disabled>
-            ð PerÃ­ode personalitzat...
+            📅 Període personalitzat...
           </button>
           <button id="btn-upload-pdf" class="btn btn-outline" onclick="UI.showUploadArea()">
-            ð¤ Pujar PDFs manualment
+            📤 Pujar PDFs manualment
           </button>
         </div>
         <div class="action-right">
-          <span id="status-text" class="status">Connecta un compte per comenÃ§ar</span>
+          <span id="status-text" class="status">Connecta un compte per començar</span>
         </div>
       </div>
 
       <!-- Upload drop zone (hidden) -->
       <div id="upload-area" class="upload-area hidden" ondrop="Upload.handleDrop(event)" ondragover="Upload.handleDragOver(event)" ondragleave="Upload.handleDragLeave(event)">
-        <p>ð Arrossega PDFs aquÃ­ o <label for="file-input" class="link">selecciona fitxers</label></p>
+        <p>📎 Arrossega PDFs aquí o <label for="file-input" class="link">selecciona fitxers</label></p>
         <input type="file" id="file-input" multiple accept=".pdf,.xlsx,.xls" onchange="Upload.handleFiles(event)" style="display:none" />
-        <p class="help-text">PDFs de factures d'Amazon, proveÃ¯dors, etc. Es processaran i pujaran a Drive.</p>
+        <p class="help-text">PDFs de factures d'Amazon, proveïdors, etc. Es processaran i pujaran a Drive.</p>
       </div>
 
       <!-- Progress -->
@@ -143,7 +143,7 @@
           <div class="stat-label">Pujades a Drive</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value" id="stat-total-eur">0 â¬</div>
+          <div class="stat-value" id="stat-total-eur">0 €</div>
           <div class="stat-label">Import total</div>
         </div>
       </div>
@@ -153,9 +153,9 @@
         <div class="filters-grid">
           <!-- Row 1: Main filters -->
           <div class="filter-group">
-            <label>ProveÃ¯dor</label>
+            <label>Proveïdor</label>
             <select id="filter-supplier" onchange="UI.applyFilters()">
-              <option value="">Tots els proveÃ¯dors</option>
+              <option value="">Tots els proveïdors</option>
             </select>
           </div>
           <div class="filter-group">
@@ -168,27 +168,27 @@
             <label>Estat</label>
             <select id="filter-status" onchange="UI.applyFilters()">
               <option value="">Tot</option>
-              <option value="new">ð Noves</option>
-              <option value="uploaded">â Pujades</option>
-              <option value="duplicate">ð Duplicades</option>
-              <option value="error">â Error</option>
+              <option value="new">🆕 Noves</option>
+              <option value="uploaded">✅ Pujades</option>
+              <option value="duplicate">🔁 Duplicades</option>
+              <option value="error">❌ Error</option>
             </select>
           </div>
           <div class="filter-group">
             <label>Text lliure</label>
-            <input type="text" id="filter-search" placeholder="Assumpte, nÃºm. factura..." oninput="UI.applyFilters()" />
+            <input type="text" id="filter-search" placeholder="Assumpte, núm. factura..." oninput="UI.applyFilters()" />
           </div>
 
           <!-- Row 2: Price and date ranges -->
           <div class="filter-group">
-            <label>Import exacte (â¬)</label>
+            <label>Import exacte (€)</label>
             <input type="number" id="filter-amount-exact" step="0.01" placeholder="150.50" oninput="UI.applyFilters()" />
           </div>
           <div class="filter-group filter-range">
-            <label>Rang import (â¬)</label>
+            <label>Rang import (€)</label>
             <div class="range-inputs">
               <input type="number" id="filter-amount-min" step="0.01" placeholder="Des de" oninput="UI.applyFilters()" />
-              <span class="range-sep">â</span>
+              <span class="range-sep">—</span>
               <input type="number" id="filter-amount-max" step="0.01" placeholder="Fins a" oninput="UI.applyFilters()" />
             </div>
           </div>
@@ -196,13 +196,13 @@
             <label>Rang data</label>
             <div class="range-inputs">
               <input type="date" id="filter-date-from" oninput="UI.applyFilters()" />
-              <span class="range-sep">â</span>
+              <span class="range-sep">—</span>
               <input type="date" id="filter-date-to" oninput="UI.applyFilters()" />
             </div>
           </div>
           <div class="filter-group filter-actions-col">
             <label>&nbsp;</label>
-            <button class="btn btn-ghost btn-sm" onclick="UI.clearFilters()">ðï¸ Netejar filtres</button>
+            <button class="btn btn-ghost btn-sm" onclick="UI.clearFilters()">🗑️ Netejar filtres</button>
           </div>
         </div>
 
@@ -212,8 +212,8 @@
             <span id="filter-count-text"></span>
           </div>
           <div class="filter-right">
-            <button class="btn btn-success btn-sm" onclick="Processor.uploadSelected()">ð¤ Pujar seleccionades a Drive</button>
-            <button class="btn btn-outline btn-sm" onclick="Processor.downloadSelected()">ð¾ Descarregar ZIP</button>
+            <button class="btn btn-success btn-sm" onclick="Processor.uploadSelected()">📤 Pujar seleccionades a Drive</button>
+            <button class="btn btn-outline btn-sm" onclick="Processor.downloadSelected()">💾 Descarregar ZIP</button>
           </div>
         </div>
       </div>
@@ -226,9 +226,9 @@
               <th><input type="checkbox" id="select-all" onchange="UI.toggleSelectAll(this)" /></th>
               <th>Estat</th>
               <th>Data</th>
-              <th>ProveÃ¯dor</th>
+              <th>Proveïdor</th>
               <th>Assumpte / Fitxer</th>
-              <th>NÃºm. Factura</th>
+              <th>Núm. Factura</th>
               <th>Import</th>
               <th>Nom Hisenda</th>
               <th>Font</th>
@@ -239,7 +239,7 @@
             <tr class="empty-row">
               <td colspan="10">
                 <div class="empty-state">
-                  <p>ð Connecta un compte Gmail i clica <strong>"Buscar factures"</strong> per comenÃ§ar</p>
+                  <p>📄 Connecta un compte Gmail i clica <strong>"Buscar factures"</strong> per començar</p>
                 </div>
               </td>
             </tr>
@@ -249,7 +249,7 @@
 
       <!-- Log -->
       <details id="log-section" class="log-section">
-        <summary>ð Registre d'activitat</summary>
+        <summary>📋 Registre d'activitat</summary>
         <div id="log-content" class="log-content"></div>
       </details>
     </main>
