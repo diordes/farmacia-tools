@@ -1,5 +1,5 @@
 /* ============================================================
-   DriveService — Upload and organize files in Google Drive
+   DriveService â Upload and organize files in Google Drive
    ============================================================ */
 const DriveService = (() => {
 
