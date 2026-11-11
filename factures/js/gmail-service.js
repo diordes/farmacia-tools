@@ -129,8 +129,7 @@ const GmailService = (() => {
     const resp = await gapi.client.gmail.users.messages.get({
       userId: 'me',
       id: messageId,
-      format: 'metadata',
-      metadataHeaders: ['From', 'Subject', 'Date']
+      format: 'full'
     });
 
     const msg = resp.result;
