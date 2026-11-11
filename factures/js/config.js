@@ -1,5 +1,5 @@
 /* ============================================================
-   Config — localStorage persistence for settings
+   Config â localStorage persistence for settings
    ============================================================ */
 const Config = (() => {
   const STORAGE_KEY = 'factures_tool_config';
@@ -7,11 +7,11 @@ const Config = (() => {
   const DEFAULTS = {
     clientId: '549787827669-0bp6nfh8rg518hn2q3uj8l92dbk67s42.apps.googleusercontent.com',
     apiKey: '',
-    driveAccount: '',  // email del compte Drive destí (buit = mateixa que l'origen)
+    driveAccount: '',  // email del compte Drive destÃ­ (buit = mateixa que l'origen)
     driveFolderName: 'Factures {YEAR}',
     monthsBack: 3,
     sources: [],  // external web sources
-    accounts: []  // {email, token} — tokens stored separately
+    accounts: []  // {email, token} â tokens stored separately
   };
 
   function load() {
@@ -53,8 +53,8 @@ const Config = (() => {
       Auth.init();
     }
 
-    AppLog.info('Configuració guardada');
-    alert('✅ Configuració guardada!');
+    AppLog.info('ConfiguraciÃ³ guardada');
+    alert('â ConfiguraciÃ³ guardada!');
   }
 
   function get(key) {
