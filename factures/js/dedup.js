@@ -62,13 +62,14 @@ const Dedup = (() => {
         continue;
       }
 
-      // Check for fuzzy duplicates (same supplier + similar filename)
+      // Check for fuzzy duplicates (same supplier + same date + similar filename)
       let isFuzzyDup = false;
       for (const [existingKey, existingInv] of seen) {
         if (existingInv.supplier === inv.supplier &&
+            existingInv.parsedDate === inv.parsedDate &&
             areSimilarFilenames(existingInv.originalFilename, inv.originalFilename)) {
           inv.status = 'duplicate';
-          inv.dupReason = `Similar a ${existingInv.originalFilename} (${existingInv.accountEmail})`;
+          inv.dupReason = `Similar a ${existingInv.originalFilename} (${existingInv.accountEmail}, ${existingInv.parsedDate})`;
           duplicates.push(inv);
           isFuzzyDup = true;
           break;
