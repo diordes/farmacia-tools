@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Devolucions â FarmÃ cia Central BCN</title>
+  <title>Devolucions — Farmàcia Central BCN</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../css/portal.css">
   <style>
-    /* ââ Devolucions page styles ââ */
+    /* ── Devolucions page styles ── */
     .back-link {
       display: inline-flex;
       align-items: center;
@@ -342,17 +342,17 @@
   <div class="portal">
     <header>
       <div class="logo">
-        <span class="logo-icon">ð</span>
+        <span class="logo-icon">💊</span>
         <div>
-          <h1>FarmÃ cia Central BCN</h1>
+          <h1>Farmàcia Central BCN</h1>
           <p class="subtitle">Eines internes</p>
         </div>
       </div>
     </header>
 
     <main>
-      <a href="../" class="back-link">â Tornar a Eines</a>
-      <h2 class="page-title">ð Devolucions automÃ tiques</h2>
+      <a href="../" class="back-link">← Tornar a Eines</a>
+      <h2 class="page-title">🔄 Devolucions automàtiques</h2>
 
       <!-- Scanner input -->
       <div class="scan-area">
@@ -373,7 +373,7 @@
             <select id="reasonSelect">
               <option value="NO_INTERESA">No interessa</option>
               <option value="SERVIDO_POR_ERROR">Servit per error</option>
-              <option value="DEFECTUOSO">DefectuÃ³s</option>
+              <option value="DEFECTUOSO">Defectuós</option>
               <option value="FECHA_DE_CADUCIDAD">Caducitat</option>
               <option value="ERROR_DE_PRECIO">Error de preu</option>
               <option value="OTROS">Altres</option>
@@ -412,14 +412,14 @@
             <div class="wholesaler-icon wholesaler-fede">FF</div>
             <div class="wholesaler-info">
               <div class="wholesaler-name">Fedefarma</div>
-              <div class="wholesaler-desc">PrÃ²ximament</div>
+              <div class="wholesaler-desc">Pròximament</div>
             </div>
           </button>
           <button class="wholesaler-btn" onclick="processReturn('cofares')" id="btnCofares" disabled>
             <div class="wholesaler-icon wholesaler-cofares">CO</div>
             <div class="wholesaler-info">
               <div class="wholesaler-name">Cofares</div>
-              <div class="wholesaler-desc">PrÃ²ximament</div>
+              <div class="wholesaler-desc">Pròximament</div>
             </div>
           </button>
         </div>
@@ -427,36 +427,36 @@
 
       <!-- Userscript install -->
       <div class="install-section">
-        <h3>âï¸ ConfiguraciÃ³ (una sola vegada)</h3>
-        <p>L'eina necessita un userscript instalÂ·lat al navegador per poder automatitzar el portal del majorista.</p>
+        <h3>⚙️ Configuració (una sola vegada)</h3>
+        <p>L'eina necessita un userscript instal·lat al navegador per poder automatitzar el portal del majorista.</p>
         <ol class="install-steps">
-          <li>InstalÂ·la <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey</a> al Chrome</li>
-          <li>Clica el botÃ³ per instalÂ·lar l'script automÃ tic:</li>
+          <li>Instal·la <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey</a> al Chrome</li>
+          <li>Clica el botó per instal·lar l'script automàtic:</li>
         </ol>
         <a href="auto-devolucions.user.js" class="btn btn-primary" id="installBtn">
-          ð¥ InstalÂ·lar userscript de devolucions
+          📥 Instal·lar userscript de devolucions
         </a>
         <div style="margin-top: 12px" id="scriptStatus">
-          <span class="status-badge status-missing">â  Comprovant script...</span>
+          <span class="status-badge status-missing">⚠ Comprovant script...</span>
         </div>
       </div>
     </main>
 
     <footer>
-      <p>FarmÃ cia Central BCN Â· Eines d'Ãºs intern</p>
+      <p>Farmàcia Central BCN · Eines d'ús intern</p>
     </footer>
   </div>
 
   <div class="toast" id="toast"></div>
 
   <script>
-    // ââ State ââ
+    // ── State ──
     let products = [];
 
     const REASON_LABELS = {
       'NO_INTERESA': 'No interessa',
       'SERVIDO_POR_ERROR': 'Servit per error',
-      'DEFECTUOSO': 'DefectuÃ³s',
+      'DEFECTUOSO': 'Defectuós',
       'FECHA_DE_CADUCIDAD': 'Caducitat',
       'ERROR_DE_PRECIO': 'Error de preu',
       'OTROS': 'Altres'
@@ -477,7 +477,7 @@
       // fedefarma and cofares will be added later
     };
 
-    // ââ Input handling ââ
+    // ── Input handling ──
     const cnInput = document.getElementById('cnInput');
     const qtyInput = document.getElementById('qtyInput');
     const reasonSelect = document.getElementById('reasonSelect');
@@ -498,7 +498,7 @@
 
       // Check for duplicates
       if (products.some(p => p.cn === cn)) {
-        showToast('â  Aquest CN ja estÃ  a la llista');
+        showToast('⚠ Aquest CN ja està a la llista');
         cnInput.value = '';
         cnInput.focus();
         return;
@@ -512,7 +512,7 @@
       cnInput.value = '';
       qtyInput.value = '1';
       cnInput.focus();
-      showToast(`â CN ${cn} afegit`);
+      showToast(`✓ CN ${cn} afegit`);
     }
 
     function removeProduct(index) {
@@ -545,20 +545,20 @@
       body.innerHTML = products.map((p, i) => `
         <div class="product-item">
           <span class="product-cn">${p.cn}</span>
-          <span class="product-qty">Ã${p.qty}</span>
+          <span class="product-qty">×${p.qty}</span>
           <span class="product-reason">${REASON_LABELS[p.reason]}</span>
-          <button class="product-remove" onclick="removeProduct(${i})" title="Eliminar">â</button>
+          <button class="product-remove" onclick="removeProduct(${i})" title="Eliminar">✕</button>
         </div>
       `).join('');
     }
 
-    // ââ Process return ââ
+    // ── Process return ──
     function processReturn(wholesaler) {
       if (products.length === 0) return;
 
       const url = PORTAL_URLS[wholesaler];
       if (!url) {
-        showToast('â  Majorista no disponible encara');
+        showToast('⚠ Majorista no disponible encara');
         return;
       }
 
@@ -572,20 +572,20 @@
 
       // Open portal in new tab
       window.open(returnUrl, '_blank');
-      showToast('ð Portal obert â l\'script processarÃ  les devolucions');
+      showToast('🚀 Portal obert — l\'script processarà les devolucions');
     }
 
-    // ââ Userscript detection ââ
+    // ── Userscript detection ──
     let scriptDetected = false;
     function checkUserscript() {
       const el = document.getElementById('scriptStatus');
       if (window.__FARMACIA_DEVOLUCIONS_SCRIPT__) {
         scriptDetected = true;
-        el.innerHTML = '<span class="status-badge status-ok">â Script instalÂ·lat i detectat</span>';
+        el.innerHTML = '<span class="status-badge status-ok">✓ Script instal·lat i detectat</span>';
       } else if (!scriptDetected) {
-        el.innerHTML = '<span class="status-badge status-missing">â  Script no detectat</span>' +
+        el.innerHTML = '<span class="status-badge status-missing">⚠ Script no detectat</span>' +
           '<div style="margin-top:8px;font-size:0.82rem;color:var(--text-secondary)">' +
-          'Si ja l\'has instalÂ·lat, <a href="#" onclick="markInstalled(event)">clica aquÃ­ per confirmar</a>.</div>';
+          'Si ja l\'has instal·lat, <a href="#" onclick="markInstalled(event)">clica aquí per confirmar</a>.</div>';
       }
     }
 
@@ -594,9 +594,9 @@
       scriptDetected = true;
       try { localStorage.setItem('farmacia_script_installed', '1'); } catch(e) {}
       const el = document.getElementById('scriptStatus');
-      el.innerHTML = '<span class="status-badge status-ok">â Script marcat com instalÂ·lat</span>';
+      el.innerHTML = '<span class="status-badge status-ok">✓ Script marcat com instal·lat</span>';
       document.getElementById('btnAlliance').disabled = products.length === 0;
-      showToast('â Confirmat! Pots processar devolucions.');
+      showToast('✓ Confirmat! Pots processar devolucions.');
     }
 
     // Check saved state
@@ -609,7 +609,7 @@
     // Listen for userscript announcing itself
     window.addEventListener('farmacia-devolucions-ready', checkUserscript);
 
-    // ââ Toast ââ
+    // ── Toast ──
     function showToast(msg) {
       const toast = document.getElementById('toast');
       toast.textContent = msg;
@@ -618,7 +618,7 @@
       toast._timeout = setTimeout(() => toast.classList.remove('show'), 2500);
     }
 
-    // ââ Persist state in localStorage ââ
+    // ── Persist state in localStorage ──
     function saveState() {
       try { localStorage.setItem('farmacia_devolucions', JSON.stringify(products)); } catch(e) {}
     }
