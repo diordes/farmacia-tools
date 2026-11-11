@@ -1,5 +1,5 @@
 /* ============================================================
-   Processor — Download, rename, and upload invoices to Drive
+   Processor â Download, rename, and upload invoices to Drive
    ============================================================ */
 const Processor = (() => {
 
@@ -13,7 +13,7 @@ const Processor = (() => {
 
     const confirm = window.confirm(
       `Pujar ${selected.length} factura(es) a Google Drive?\n\n` +
-      `Es guardaran a la carpeta "${Config.get('driveFolderName')}" organitzades per proveïdor.`
+      `Es guardaran a la carpeta "${Config.get('driveFolderName')}" organitzades per proveÃ¯dor.`
     );
     if (!confirm) return;
 
@@ -27,7 +27,7 @@ const Processor = (() => {
         `Pujant ${inv.haciendaName}...`,
         i + 1,
         selected.length,
-        `${inv.supplier} — ${inv.originalFilename}`
+        `${inv.supplier} â ${inv.originalFilename}`
       );
 
       try {
@@ -79,7 +79,7 @@ const Processor = (() => {
     UI.showProgress(false);
     UI.updateStats();
 
-    const msg = `✅ Procés completat!\n\n` +
+    const msg = `â ProcÃ©s completat!\n\n` +
       `- Pujades: ${uploaded}\n` +
       `- Errors: ${errors}\n` +
       `- Duplicades: ${selected.length - uploaded - errors}`;
@@ -148,7 +148,7 @@ const Processor = (() => {
     const driveTarget = Config.get('driveAccount') || accounts[0].email;
     const driveAcc = accounts.find(a => a.email === driveTarget);
     if (!driveAcc) {
-      alert('⚠️ El compte Drive destí (' + driveTarget + ') no està connectat. Connecta\'l primer.');
+      alert('â ï¸ El compte Drive destÃ­ (' + driveTarget + ') no estÃ  connectat. Connecta\'l primer.');
       return;
     }
     const email = driveAcc.email;
@@ -213,7 +213,7 @@ const Processor = (() => {
 
     UI.showProgress(false);
     UI.updateStats();
-    alert(`✅ ${uploaded} de ${files.length} fitxers pujats a Drive`);
+    alert(`â ${uploaded} de ${files.length} fitxers pujats a Drive`);
   }
 
   // Download a single invoice with Hacienda name
@@ -244,7 +244,7 @@ const Processor = (() => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      AppLog.success(`✅ Descarregat: ${inv.haciendaName}`);
+      AppLog.success(`â Descarregat: ${inv.haciendaName}`);
     } catch (e) {
       AppLog.error(`Error descarregant: ${e.message}`);
     }
