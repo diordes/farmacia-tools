@@ -1,5 +1,5 @@
 /* ============================================================
-   UI â User interface updates and interactions
+   UI — User interface updates and interactions
    ============================================================ */
 const UI = (() => {
 
@@ -32,7 +32,7 @@ const UI = (() => {
       chip.innerHTML = `
         <span class="dot" style="background:${isActive ? 'var(--success)' : 'var(--danger)'}"></span>
         <span>${acc.email}</span>
-        <span class="remove" onclick="Auth.removeAccount('${acc.email}')" title="Desconnectar">â</span>
+        <span class="remove" onclick="Auth.removeAccount('${acc.email}')" title="Desconnectar">✕</span>
       `;
       bar.appendChild(chip);
     }
@@ -57,7 +57,7 @@ const UI = (() => {
       div.innerHTML = `
         <span class="dot" style="width:8px;height:8px;border-radius:50%;background:${isActive ? 'var(--success)' : 'var(--danger)'}"></span>
         <span style="flex:1">${acc.email} ${isActive ? '(actiu)' : '(expirat)'}</span>
-        ${!isActive ? `<button class="btn btn-sm btn-outline" onclick="Auth.addAccount('${acc.email}').then(() => UI.updateAccountsList())">ð Reconnectar</button>` : ''}
+        ${!isActive ? `<button class="btn btn-sm btn-outline" onclick="Auth.addAccount('${acc.email}').then(() => UI.updateAccountsList())">🔄 Reconnectar</button>` : ''}
         <button class="btn btn-sm btn-danger" onclick="Auth.removeAccount('${acc.email}')">Eliminar</button>
       `;
       list.appendChild(div);
@@ -88,7 +88,7 @@ const UI = (() => {
     if (status) {
       status.textContent = hasAccounts
         ? `${Auth.getActiveTokens().length} compte(s) connectat(s)`
-        : 'Connecta un compte per comenÃ§ar';
+        : 'Connecta un compte per començar';
     }
   }
 
@@ -128,7 +128,7 @@ const UI = (() => {
         <tr class="empty-row">
           <td colspan="10">
             <div class="empty-state">
-              <p>No s'han trobat factures. Prova amb un altre perÃ­ode o revisa els filtres.</p>
+              <p>No s'han trobat factures. Prova amb un altre període o revisa els filtres.</p>
             </div>
           </td>
         </tr>`;
@@ -154,7 +154,7 @@ const UI = (() => {
     tr.dataset.account = inv.accountEmail;
 
     const statusBadge = getStatusBadge(inv.status);
-    const sourceLabel = inv.source === 'gmail' ? 'ð§' : inv.source === 'drive' ? 'ð' : 'ð¤';
+    const sourceLabel = inv.source === 'gmail' ? '📧' : inv.source === 'drive' ? '📁' : '📤';
 
     tr.innerHTML = `
       <td><input type="checkbox" class="inv-check" data-key="${inv.dedupKey}" ${inv.status === 'duplicate' ? 'disabled' : ''} /></td>
@@ -168,7 +168,7 @@ const UI = (() => {
         <div style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(inv.originalFilename || '')}</div>
       </td>
       <td>${escapeHtml(inv.invoiceNumber || '-')}</td>
-      <td>${inv.amount ? inv.amount + ' â¬' : '-'}</td>
+      <td>${inv.amount ? inv.amount + ' €' : '-'}</td>
       <td title="${escapeHtml(inv.haciendaName)}">
         <div class="hacienda-name" data-key="${inv.dedupKey}" onclick="UI.editHaciendaName('${inv.dedupKey}')" title="Clic per editar" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.75rem;cursor:pointer;border-bottom:1px dashed var(--text-muted)">
           ${escapeHtml(inv.haciendaName)}
@@ -176,9 +176,9 @@ const UI = (() => {
       </td>
       <td><span class="source-badge">${sourceLabel} ${escapeHtml(inv.accountEmail?.split('@')[0] || inv.source)}</span></td>
       <td class="action-btns">
-        ${inv.source === 'gmail' ? `<button class="btn btn-sm btn-outline" onclick="Processor.downloadOne('${inv.dedupKey}')" title="Descarregar amb nom Hisenda">â¬ï¸</button>` : ''}
-        ${inv.driveLink ? `<a href="${inv.driveLink}" target="_blank" class="btn btn-sm btn-outline" title="Obrir a Drive">ð</a>` : ''}
-        ${inv.status === 'duplicate' && inv.dupReason ? `<span title="${escapeHtml(inv.dupReason)}" style="cursor:help">â¹ï¸</span>` : ''}
+        ${inv.source === 'gmail' ? `<button class="btn btn-sm btn-outline" onclick="Processor.downloadOne('${inv.dedupKey}')" title="Descarregar amb nom Hisenda">⬇️</button>` : ''}
+        ${inv.driveLink ? `<a href="${inv.driveLink}" target="_blank" class="btn btn-sm btn-outline" title="Obrir a Drive">📁</a>` : ''}
+        ${inv.status === 'duplicate' && inv.dupReason ? `<span title="${escapeHtml(inv.dupReason)}" style="cursor:help">ℹ️</span>` : ''}
       </td>
     `;
     return tr;
@@ -214,11 +214,11 @@ const UI = (() => {
 
   function getStatusBadge(status) {
     const badges = {
-      'new': '<span class="status-badge status-new">ð Nova</span>',
-      'uploaded': '<span class="status-badge status-uploaded">â Pujada</span>',
-      'duplicate': '<span class="status-badge status-duplicate">ð Duplicat</span>',
-      'error': '<span class="status-badge status-error">â Error</span>',
-      'pending': '<span class="status-badge status-pending">â³ Pendent</span>'
+      'new': '<span class="status-badge status-new">🆕 Nova</span>',
+      'uploaded': '<span class="status-badge status-uploaded">✅ Pujada</span>',
+      'duplicate': '<span class="status-badge status-duplicate">🐁 Duplicat</span>',
+      'error': '<span class="status-badge status-error">❌ Error</span>',
+      'pending': '<span class="status-badge status-pending">⏳ Pendent</span>'
     };
     return badges[status] || status;
   }
@@ -236,7 +236,7 @@ const UI = (() => {
     setText('stat-new', newCount);
     setText('stat-dupes', dupes);
     setText('stat-uploaded', uploaded);
-    setText('stat-total-eur', totalEur.toFixed(2) + ' â¬');
+    setText('stat-total-eur', totalEur.toFixed(2) + ' €');
   }
 
   function updateFilterOptions() {
@@ -247,7 +247,7 @@ const UI = (() => {
     const filterAccount = document.getElementById('filter-account');
 
     if (filterSupplier) {
-      filterSupplier.innerHTML = '<option value="">Tots els proveÃ¯dors</option>';
+      filterSupplier.innerHTML = '<option value="">Tots els proveïdors</option>';
       for (const s of suppliers) {
         filterSupplier.innerHTML += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`;
       }
