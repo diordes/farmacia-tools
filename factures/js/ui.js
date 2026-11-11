@@ -160,15 +160,15 @@ const UI = (() => {
       <td><input type="checkbox" class="inv-check" data-key="${inv.dedupKey}" ${inv.status === 'duplicate' ? 'disabled' : ''} /></td>
       <td>${statusBadge}</td>
       <td>${inv.parsedDate || '-'}</td>
-      <td><strong>${escapeHtml(inv.supplier)}</strong></td>
+      <td><span class="editable-field" data-key="${inv.dedupKey}" data-field="supplier" onclick="UI.editField('${inv.dedupKey}','supplier')" title="Clic per editar proveïdor" style="cursor:pointer;border-bottom:1px dashed var(--text-muted)"><strong>${escapeHtml(inv.supplier)}</strong></span></td>
       <td title="${escapeHtml(inv.subject)}">
         <div style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
           ${escapeHtml(inv.subject)}
         </div>
         <div style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(inv.originalFilename || '')}</div>
       </td>
-      <td>${escapeHtml(inv.invoiceNumber || '-')}</td>
-      <td>${inv.amount ? inv.amount + ' €' : '-'}</td>
+      <td><span class="editable-field" data-key="${inv.dedupKey}" data-field="invoiceNumber" onclick="UI.editField('${inv.dedupKey}','invoiceNumber')" title="Clic per editar núm. factura" style="cursor:pointer;border-bottom:1px dashed var(--text-muted)">${escapeHtml(inv.invoiceNumber || '-')}</span></td>
+      <td><span class="editable-field" data-key="${inv.dedupKey}" data-field="amount" onclick="UI.editField('${inv.dedupKey}','amount')" title="Clic per editar import" style="cursor:pointer;border-bottom:1px dashed var(--text-muted)">${inv.amount ? inv.amount + ' €' : '-'}</span></td>
       <td title="${escapeHtml(inv.haciendaName)}">
         <div class="hacienda-name" data-key="${inv.dedupKey}" onclick="UI.editHaciendaName('${inv.dedupKey}')" title="Clic per editar" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:0.75rem;cursor:pointer;border-bottom:1px dashed var(--text-muted)">
           ${escapeHtml(inv.haciendaName)}
@@ -370,6 +370,47 @@ const UI = (() => {
     return div.innerHTML;
   }
 
+  function editField(dedupKey, field) {
+    const inv = allInvoices.find(i => i.dedupKey === dedupKey);
+    if (!inv) return;
+
+    const labels = { supplier: 'Proveïdor', invoiceNumber: 'Núm. factura', amount: 'Import (€)' };
+    const currentVal = inv[field] || '';
+    const newVal = prompt(`Editar ${labels[field] || field}:`, currentVal);
+    if (newVal === null || newVal.trim() === currentVal) return;
+
+    const trimmed = newVal.trim();
+    const oldDedupKey = inv.dedupKey;
+
+    // Update the field
+    inv[field] = trimmed;
+
+    // Recalculate Hacienda name
+    inv.haciendaName = InvoiceParser.generateHaciendaName(
+      inv.parsedDate, inv.supplier, inv.invoiceNumber, inv.amount, inv.originalFilename
+    );
+
+    // Recalculate dedup key
+    inv.dedupKey = InvoiceParser.generateDedupKey(
+      inv.supplier, inv.invoiceNumber, inv.amount, inv.parsedDate, inv.originalFilename
+    );
+
+    // Re-render the row (find by old key since DOM still has it)
+    const body = document.getElementById('results-body');
+    if (body) {
+      const rows = body.querySelectorAll('tr[data-dedup-key]');
+      for (const row of rows) {
+        if (row.dataset.dedupKey === oldDedupKey) {
+          row.replaceWith(createInvoiceRow(inv));
+          break;
+        }
+      }
+    }
+    updateStats();
+
+    AppLog.info(`Camp ${labels[field]} editat: ${trimmed} \u2192 Nom Hisenda: ${inv.haciendaName}`);
+  }
+
   function editHaciendaName(dedupKey) {
     const inv = allInvoices.find(i => i.dedupKey === dedupKey);
     if (!inv) return;
@@ -398,6 +439,6 @@ const UI = (() => {
     showProgress, updateProgress, showUploadArea,
     renderResults, addInvoiceRow, updateInvoiceRow, updateStats,
     applyFilters, clearFilters, getSelectedInvoices, toggleSelectAll, getAllInvoices,
-    editHaciendaName, updateDriveAccountSelector
+    editField, editHaciendaName, updateDriveAccountSelector
   };
 })();
