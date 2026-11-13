@@ -331,10 +331,56 @@
       opacity: 1;
     }
 
+    /* Manual mode */
+    .manual-section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .manual-section h4 {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+    .manual-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-manual {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .btn-manual:hover {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+    .btn-manual:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-manual:disabled:hover {
+      border-color: var(--border);
+      background: var(--bg);
+    }
+
     @media (max-width: 480px) {
       .scan-row { flex-direction: column; }
       .options-row { flex-direction: column; align-items: stretch; }
       .wholesaler-grid { grid-template-columns: 1fr; }
+      .manual-actions { flex-direction: column; }
     }
   </style>
 </head>
@@ -422,6 +468,19 @@
               <div class="wholesaler-desc">Pròximament</div>
             </div>
           </button>
+        </div>
+
+        <!-- Manual mode -->
+        <div class="manual-section">
+          <h4>Mode manual (sense userscript)</h4>
+          <div class="manual-actions">
+            <button class="btn-manual" onclick="copyList()" id="btnCopy" disabled>
+              📋 Copiar llista al portapapers
+            </button>
+            <button class="btn-manual" onclick="openPortalManual('alliance')" id="btnManualAlliance" disabled>
+              🔗 Obrir Alliance (manual)
+            </button>
+          </div>
         </div>
       </div>
 
@@ -533,9 +592,14 @@
       const emptyMsg = document.getElementById('emptyMsg');
       const btnAlliance = document.getElementById('btnAlliance');
 
+      const btnCopy = document.getElementById('btnCopy');
+      const btnManualAlliance = document.getElementById('btnManualAlliance');
+
       count.textContent = products.length;
       clearBtn.style.display = products.length > 0 ? '' : 'none';
       btnAlliance.disabled = products.length === 0;
+      btnCopy.disabled = products.length === 0;
+      btnManualAlliance.disabled = products.length === 0;
 
       if (products.length === 0) {
         body.innerHTML = '<div class="product-list-empty" id="emptyMsg">Cap producte afegit. Escaneja o escriu un codi nacional.</div>';
@@ -573,6 +637,38 @@
       // Open portal in new tab
       window.open(returnUrl, '_blank');
       showToast('🚀 Portal obert — l\'script processarà les devolucions');
+    }
+
+    // ── Manual mode ──
+    function copyList() {
+      if (products.length === 0) return;
+      const lines = products.map((p, i) =>
+        `${i + 1}. CN ${p.cn}  ×${p.qty}  ${REASON_LABELS[p.reason]}`
+      );
+      const text = 'DEVOLUCIONS\n' + '─'.repeat(30) + '\n' + lines.join('\n');
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('📋 Llista copiada al portapapers');
+      }).catch(() => {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        showToast('📋 Llista copiada');
+      });
+    }
+
+    function openPortalManual(wholesaler) {
+      const urls = {
+        alliance: 'https://my.alliance-healthcare.es/group/pro/devoluciones#/'
+      };
+      const url = urls[wholesaler];
+      if (!url) { showToast('⚠ Majorista no disponible encara'); return; }
+      // Copy list first, then open
+      copyList();
+      setTimeout(() => window.open(url, '_blank'), 300);
     }
 
     // ── Userscript detection ──
