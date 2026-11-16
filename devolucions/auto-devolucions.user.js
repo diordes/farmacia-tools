@@ -1,11 +1,12 @@
 // ==UserScript==
-// @name         FarmÃ cia Central BCN â Auto Devolucions
+// @name         Farmàcia Central BCN — Auto Devolucions
 // @namespace    https://diordes.github.io/farmacia-tools
-// @version      2.0.0
+// @version      2.0.1
 // @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare)
-// @author       FarmÃ cia Central BCN
+// @author       Farmàcia Central BCN
 // @match        https://my.alliance-healthcare.es/*
 // @match        https://diordes.github.io/farmacia-tools/*
+// @noframes
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
@@ -16,23 +17,23 @@
 (function() {
   'use strict';
 
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
-  //  CONFIGURACIÃ
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
+  //  CONFIGURACIÓ
+  // ══════════════════════════════════════════════
 
   const CONFIG = {
     POLL_INTERVAL: 500,       // ms entre comprovacions DOM
-    MAX_WAIT: 20000,          // ms mÃ xim d'espera per un element
+    MAX_WAIT: 20000,          // ms màxim d'espera per un element
     ACTION_DELAY: 1000,       // ms pausa entre accions (SPA render)
-    SEARCH_DELAY: 2000,       // ms pausa desprÃ©s d'una cerca
-    LOADING_WAIT: 15000,      // ms mÃ xim d'espera per .tsfz-loading-modal
-    PAGE_LOAD_DELAY: 6000,    // ms espera carrega "Solicitar devoluciÃ³n parcial"
-    STALE_MS: 3600000,        // 1h â dades pendents caduquen
+    SEARCH_DELAY: 2000,       // ms pausa després d'una cerca
+    LOADING_WAIT: 15000,      // ms màxim d'espera per .tsfz-loading-modal
+    PAGE_LOAD_DELAY: 6000,    // ms espera carrega "Solicitar devolución parcial"
+    STALE_MS: 3600000,        // 1h — dades pendents caduquen
   };
 
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
   //  UTILITATS
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
 
   function log(msg, ...args) {
     console.log(`[AutoDevolucions v2] ${msg}`, ...args);
@@ -42,7 +43,7 @@
     return new Promise(r => setTimeout(r, ms));
   }
 
-  /** Espera que aparegui un element (selector o funciÃ³). Retorna l'element o null. */
+  /** Espera que aparegui un element (selector o funció). Retorna l'element o null. */
   function waitForEl(selectorOrFn, timeout = CONFIG.MAX_WAIT) {
     return new Promise(resolve => {
       const start = Date.now();
@@ -95,9 +96,9 @@
     select.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
-  //  GM STORAGE â dades cross-domain
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
+  //  GM STORAGE — dades cross-domain
+  // ══════════════════════════════════════════════
 
   function storePending(products, wholesaler) {
     GM_setValue('pending_return', JSON.stringify({
@@ -128,9 +129,9 @@
     log('Cleared pending return data');
   }
 
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
   //  OVERLAY D'ESTAT
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
 
   function createOverlay() {
     const old = document.getElementById('farmacia-auto-status');
@@ -141,8 +142,8 @@
     ov.style.cssText = 'position:fixed;top:16px;right:16px;width:360px;background:#1e293b;color:#f1f5f9;border-radius:12px;padding:16px 20px;font-family:Inter,-apple-system,sans-serif;font-size:13px;line-height:1.5;z-index:99999;box-shadow:0 20px 40px rgba(0,0,0,0.3)';
     ov.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-        <span style="font-size:18px">ð</span>
-        <strong style="font-size:14px">Auto Devolucions v2</strong>
+        <span style="font-size:18px">🔄</span>
+        <strong style="font-size:14px">Auto Devolucions v2.0.1</strong>
         <span id="fa-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px;background:#3b82f6;color:white;font-weight:600">Processant...</span>
       </div>
       <div id="fa-log" style="max-height:220px;overflow-y:auto;font-size:12px;color:#94a3b8"></div>
@@ -152,14 +153,14 @@
     document.body.appendChild(ov);
   }
 
-  const ICONS = { info: 'â¹ï¸', ok: 'â', warn: 'â ï¸', error: 'â', search: 'ð' };
+  const ICONS = { info: 'ℹ️', ok: '✅', warn: '⚠️', error: '❌', search: '🔍' };
 
   function status(msg, type = 'info') {
     const el = document.getElementById('fa-log');
     if (!el) return;
     const d = document.createElement('div');
     d.style.marginBottom = '4px';
-    d.innerHTML = `${ICONS[type] || 'Â·'} ${msg}`;
+    d.innerHTML = `${ICONS[type] || '·'} ${msg}`;
     el.appendChild(d);
     el.scrollTop = el.scrollHeight;
     log(msg);
@@ -179,15 +180,15 @@
     const ov = document.getElementById('farmacia-auto-status');
     if (!ov) return;
     const btn = document.createElement('button');
-    btn.textContent = 'â Tancar';
+    btn.textContent = '✕ Tancar';
     btn.style.cssText = 'margin-top:12px;width:100%;padding:8px;background:#334155;color:#f1f5f9;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600';
     btn.onclick = () => ov.remove();
     ov.appendChild(btn);
   }
 
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
   //  HELPERS PORTAL
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
 
   /** Tanca el banner de cookies OneTrust si existeix. */
   async function dismissCookies() {
@@ -206,72 +207,72 @@
     await sleep(300);
     const el = document.querySelector('.tsfz-loading-modal');
     if (el && el.offsetParent !== null) {
-      status('Esperant cÃ rrega...', 'info');
+      status('Esperant càrrega...', 'info');
       await waitForElGone('.tsfz-loading-modal');
     }
     await sleep(500);
   }
 
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
-  //  ALLIANCE HEALTHCARE â AUTOMATITZACIÃ
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
+  //  ALLIANCE HEALTHCARE — AUTOMATITZACIÓ
+  // ══════════════════════════════════════════════
 
   async function allianceRun(products) {
     createOverlay();
-    status(`Iniciant devoluciÃ³ de ${products.length} producte(s)...`);
+    status(`Iniciant devolució de ${products.length} producte(s)...`);
 
     await dismissCookies();
 
-    // ââ 1. Navegar a la pÃ gina de solÂ·licitud ââ
+    // ── 1. Navegar a la pàgina de sol·licitud ──
     const hash = window.location.hash;
     if (!hash || hash === '#/' || hash === '#') {
-      status('Navegant a "Solicitar devoluciÃ³n parcial"...', 'info');
+      status('Navegant a "Solicitar devolución parcial"...', 'info');
 
-      // Buscar el botÃ³/link "Solicitar devoluciÃ³n parcial"
+      // Buscar el botó/link "Solicitar devolución parcial"
       const solBtn = await waitForEl(() => {
         const els = document.querySelectorAll('a, button, div.btn, span, li');
         for (const el of els) {
-          if (el.textContent.trim().includes('Solicitar devoluciÃ³n parcial')) return el;
+          if (el.textContent.trim().includes('Solicitar devolución parcial')) return el;
         }
         return null;
       }, CONFIG.MAX_WAIT);
 
       if (solBtn) {
         solBtn.click();
-        status('Clic a "Solicitar devoluciÃ³n parcial"', 'ok');
+        status('Clic a "Solicitar devolución parcial"', 'ok');
         await sleep(CONFIG.PAGE_LOAD_DELAY);
       } else {
-        status('No s\'ha trobat "Solicitar devoluciÃ³n parcial"', 'error');
+        status('No s\'ha trobat "Solicitar devolución parcial"', 'error');
         badge('Error', '#ef4444');
         addCloseBtn();
         return;
       }
     } else if (hash.includes('/requests/products')) {
-      status('Ja som a la pÃ gina de productes', 'ok');
+      status('Ja som a la pàgina de productes', 'ok');
       await sleep(2000);
     } else {
-      // Estem en un altre hash â esperem una mica
+      // Estem en un altre hash — esperem una mica
       await sleep(3000);
     }
 
     await dismissCookies();
     await waitLoading();
 
-    // ââ 2. Afegir cada producte ââ
+    // ── 2. Afegir cada producte ──
     let ok = 0, fail = 0;
     const added = []; // productes afegits correctament
 
     for (let i = 0; i < products.length; i++) {
       const p = products[i];
       progress(i, products.length);
-      status(`<strong>${i + 1}/${products.length}</strong>: CN ${p.cn} Ã${p.qty}`, 'search');
+      status(`<strong>${i + 1}/${products.length}</strong>: CN ${p.cn} ×${p.qty}`, 'search');
 
       try {
         const success = await allianceAddProduct(p, i === 0);
         if (success) {
           ok++;
           added.push(p);
-          status(`CN ${p.cn} afegit â`, 'ok');
+          status(`CN ${p.cn} afegit ✓`, 'ok');
         } else {
           fail++;
           status(`CN ${p.cn}: no s'ha pogut afegir`, 'error');
@@ -287,17 +288,17 @@
 
     progress(products.length, products.length);
 
-    // ââ 3. Ajustar quantitats i motius per lÃ­nia ââ
+    // ── 3. Ajustar quantitats i motius per línia ──
     if (added.length > 0) {
-      status('Ajustant quantitats i motius per lÃ­nia...', 'info');
+      status('Ajustant quantitats i motius per línia...', 'info');
       await sleep(2000); // esperar que el DOM es renderitzi
       await allianceSetQtyAndReason(added);
     }
 
-    // ââ 4. Resum final ââ
+    // ── 4. Resum final ──
     if (fail === 0) {
       badge('Completat', '#22c55e');
-      status(`â¨ ${ok} producte(s) llestos. Revisa i clica "Enviar devoluciÃ³n" manualment.`, 'ok');
+      status(`✨ ${ok} producte(s) llestos. Revisa i clica "Enviar devolución" manualment.`, 'ok');
     } else {
       badge('Parcial', '#f59e0b');
       status(`${ok} afegit(s), ${fail} error(s). Revisa la llista.`, 'warn');
@@ -307,14 +308,14 @@
     clearPending();
   }
 
-  // ââ Navegar fins al pas de cerca dins el modal ââ
+  // ── Navegar fins al pas de cerca dins el modal ──
 
   async function navigateToSearch() {
     // Cas 1: ja tenim l'input CN al modal
     let cnInput = document.querySelector('.modal #productCode');
     if (cnInput && cnInput.offsetParent !== null) return cnInput;
 
-    // Cas 2: estem al modal perÃ² en un altre pas â "Seleccionar otro producto"
+    // Cas 2: estem al modal però en un altre pas → "Seleccionar otro producto"
     const prevBtn = document.querySelector('div.btn[ng-click="previousStep()"]');
     if (prevBtn && prevBtn.offsetParent !== null) {
       prevBtn.click();
@@ -324,13 +325,13 @@
       if (cnInput) return cnInput;
     }
 
-    // Cas 3: modal tancat â obrir amb el botÃ³ de cerca
+    // Cas 3: modal tancat → obrir amb el botó de cerca
     const searchBtn = await waitForEl(
       '#search-buttons button[ng-click="searchByProduct()"]',
       CONFIG.MAX_WAIT
     );
     if (!searchBtn) {
-      // Fallback: qualsevol botÃ³ amb text "Buscar por producto"
+      // Fallback: qualsevol botó amb text "Buscar por producto"
       const fallback = await waitForEl(() => {
         const els = document.querySelectorAll('button, a, div.btn');
         for (const el of els) {
@@ -352,10 +353,10 @@
     return await waitForEl('.modal #productCode');
   }
 
-  // ââ Afegir un producte (cerca â selecciÃ³ â albarÃ  â afegir) ââ
+  // ── Afegir un producte (cerca → selecció → albarà → afegir) ──
 
   async function allianceAddProduct(product, isFirst) {
-    // ââ Pas A: Arribar a l'input de cerca ââ
+    // ── Pas A: Arribar a l'input de cerca ──
     const cnInput = await navigateToSearch();
     if (!cnInput) {
       log('Cannot find product search input (#productCode)');
@@ -372,7 +373,7 @@
     setInputValue(cnInput, product.cn);
     await sleep(300);
 
-    // ââ Pas B: Clicar "Buscar" (dins el modal) ââ
+    // ── Pas B: Clicar "Buscar" (dins el modal) ──
     const buscarBtn = document.querySelector(
       '.modal input[type="submit"][value="Buscar"]'
     );
@@ -380,7 +381,7 @@
       buscarBtn.click();
       log(`Search click for CN ${product.cn}`);
     } else {
-      // Fallback: ng-enter="find()" â Enter key
+      // Fallback: ng-enter="find()" → Enter key
       cnInput.dispatchEvent(new KeyboardEvent('keydown', {
         key: 'Enter', keyCode: 13, which: 13, bubbles: true
       }));
@@ -393,41 +394,68 @@
     await sleep(CONFIG.SEARCH_DELAY);
     await waitLoading();
 
-    // ââ Pas C: Comprovar resultats ââ
+    // ── Pas C: Comprovar resultats ──
     const modal = document.querySelector('.tsfz-lg-modal, .modal');
-    if (modal && modal.textContent.includes('No existen resultados')) {
-      log(`CN ${product.cn}: no results`);
-      status(`CN ${product.cn}: no s'ha trobat al portal`, 'warn');
-      // Tancar modal o tornar enrere
-      const closeBtn = modal.querySelector('.close, button[aria-label="Close"], .modal-header button');
-      if (closeBtn) closeBtn.click();
-      return false;
+    if (modal) {
+      const modalText = modal.textContent.toLowerCase();
+      // Comprovar diversos textos possibles de "sense resultats"
+      const noResultPatterns = [
+        'no existen resultados',
+        'no se han encontrado',
+        'sin resultados',
+        'no results',
+        '0 resultados',
+        'ningún resultado',
+      ];
+      const hasNoResults = noResultPatterns.some(p => modalText.includes(p));
+      if (hasNoResults) {
+        log(`CN ${product.cn}: no results`);
+        status(`CN ${product.cn}: no s'ha trobat al portal`, 'warn');
+        // Tancar modal o tornar enrere
+        const closeBtn = modal.querySelector('.close, button[aria-label="Close"], .modal-header button');
+        if (closeBtn) closeBtn.click();
+        return false;
+      }
     }
 
-    // ââ Pas D: Clicar la fila del resultat ââ
-    // Intentar trobar la fila amb el CN exacte
+    // ── Pas D: Clicar la fila del resultat ──
+    // NOMÉS clicar si hi ha coincidència exacta de CN (amb o sense dígit de control)
     const resultCell = await waitForEl(() => {
       const rows = document.querySelectorAll(
         '.modal tbody.table-data tr[ng-repeat="product in articleList"]'
       );
-      // Primer: buscar coincidÃ¨ncia exacta de CN
+      if (rows.length === 0) return null;
+
+      // Buscar coincidència exacta de CN
       for (const row of rows) {
         const firstCell = row.querySelector('td');
-        if (firstCell && firstCell.textContent.trim() === product.cn) {
+        if (!firstCell) continue;
+        const cellText = firstCell.textContent.trim();
+        // Match exacte o match sense dígit de control (últim dígit)
+        if (cellText === product.cn ||
+            cellText === product.cn.slice(0, -1) ||
+            product.cn === cellText.slice(0, -1)) {
           return row.querySelector('td[ng-click="nextStep(product)"]') || row;
         }
       }
-      // Segon: primera fila amb td clicable
-      const anyCell = document.querySelector(
-        '.modal tbody.table-data tr[ng-repeat="product in articleList"] td[ng-click="nextStep(product)"]'
-      );
-      if (anyCell) return anyCell;
-      // Tercer: primera fila del resultat
-      return document.querySelector('.modal tbody.table-data tr');
+
+      // Si hi ha resultats però cap coincideix, retornar un marcador especial
+      // per distingir "no results" de "results but no match"
+      return { __noExactMatch: true, rowCount: rows.length };
     }, CONFIG.MAX_WAIT);
 
     if (!resultCell) {
       log(`CN ${product.cn}: no result rows found`);
+      return false;
+    }
+
+    // Si hi ha resultats però cap coincideix exactament → NO clicar
+    if (resultCell.__noExactMatch) {
+      status(`CN ${product.cn}: ⚠ ${resultCell.rowCount} resultat(s) però cap coincideix exactament — revisa manualment`, 'warn');
+      log(`CN ${product.cn}: ${resultCell.rowCount} results but no exact CN match — skipping`);
+      // Tancar modal
+      const closeBtn = document.querySelector('.modal .close, .modal button[aria-label="Close"], .modal-header button');
+      if (closeBtn) closeBtn.click();
       return false;
     }
 
@@ -437,37 +465,37 @@
     // Esperar loading modal
     await waitLoading();
 
-    // ââ Pas E: Seleccionar albarÃ  ââ
+    // ── Pas E: Seleccionar albarà ──
     // Esperar que aparegui la llista d'albarans
     const checkbox = await waitForEl(
       'tbody.table-data tr[ng-repeat="returnLine in returnLines"]:not(.error) input[type="checkbox"][ng-model="returnLine.$$checked"]:not([disabled])'
     );
 
     if (!checkbox) {
-      log(`CN ${product.cn}: no valid albarÃ  checkbox found`);
+      log(`CN ${product.cn}: no valid albarà checkbox found`);
       // Potser no hi ha albarans disponibles
-      status(`CN ${product.cn}: cap albarÃ  disponible`, 'warn');
+      status(`CN ${product.cn}: cap albarà disponible`, 'warn');
       return false;
     }
 
     if (!checkbox.checked) {
       checkbox.click();
-      log('AlbarÃ  checkbox clicked');
+      log('Albarà checkbox clicked');
       await sleep(CONFIG.ACTION_DELAY);
     }
 
-    // ââ Pas F: Clicar "AÃ±adir productos a la lista" ââ
-    // NOTA: Ã©s un DIV, no un button!
+    // ── Pas F: Clicar "Añadir productos a la lista" ──
+    // NOTA: és un DIV, no un button!
     const addDiv = await waitForEl(
       '.modal-footer div.btn.btn-primary[ng-click="nextStep()"]'
     );
 
     if (!addDiv) {
-      // Fallback: qualsevol element amb text "AÃ±adir productos"
+      // Fallback: qualsevol element amb text "Añadir productos"
       const fallback = await waitForEl(() => {
         const els = document.querySelectorAll('.modal-footer div.btn, .modal-footer button');
         for (const el of els) {
-          if (el.textContent.trim().includes('AÃ±adir productos')) return el;
+          if (el.textContent.trim().includes('Añadir productos')) return el;
         }
         return null;
       }, 5000);
@@ -475,7 +503,7 @@
       if (fallback) {
         fallback.click();
       } else {
-        log('Cannot find "AÃ±adir productos" button/div');
+        log('Cannot find "Añadir productos" button/div');
         return false;
       }
     } else {
@@ -488,17 +516,17 @@
       addDiv.click();
     }
 
-    log('Clicked "AÃ±adir productos a la lista"');
+    log('Clicked "Añadir productos a la lista"');
     await sleep(CONFIG.ACTION_DELAY);
     await waitLoading();
 
     return true;
   }
 
-  // ââ Ajustar quantitat i motiu per cada lÃ­nia de producte ââ
+  // ── Ajustar quantitat i motiu per cada línia de producte ──
 
   async function allianceSetQtyAndReason(products) {
-    // Les lÃ­nies de producte apareixen dins div.tsfz-product-section
+    // Les línies de producte apareixen dins div.tsfz-product-section
     const sections = document.querySelectorAll('div.tsfz-product-section');
     if (sections.length === 0) {
       // Fallback: buscar la taula directament
@@ -512,10 +540,10 @@
     );
 
     if (allRows.length === 0) {
-      // Fallback mÃ©s ampli
+      // Fallback més ampli
       const anyRows = document.querySelectorAll('table.tsfz-products-table tbody tr');
       if (anyRows.length === 0) {
-        status('No s\'han trobat lÃ­nies de producte a la pÃ gina', 'warn');
+        status('No s\'han trobat línies de producte a la pàgina', 'warn');
         return;
       }
     }
@@ -527,7 +555,7 @@
     log(`Found ${rows.length} product row(s) across sections`);
 
     for (const product of products) {
-      // Trobar la fila que contÃ© el CN d'aquest producte
+      // Trobar la fila que conté el CN d'aquest producte
       let matchedRow = null;
       for (const row of rows) {
         const text = row.textContent || '';
@@ -542,113 +570,168 @@
         continue;
       }
 
-      // ââ Quantitat ââ
+      // ── Quantitat ──
+      // Intentar selectors de més específic a més ampli
       const qtyInput = matchedRow.querySelector(
-        'td[headers="returnedQuantity"] input[type="number"][ng-model="line.quantity"]'
+        'input[ng-model="line.quantity"]'
+      ) || matchedRow.querySelector(
+        'td[headers="returnedQuantity"] input[type="number"]'
+      ) || matchedRow.querySelector(
+        'td[headers="returnedQuantity"] input'
       );
       if (qtyInput) {
         if (product.qty > 1 || qtyInput.value !== String(product.qty)) {
           setInputValue(qtyInput, product.qty);
-          status(`CN ${product.cn}: quantitat â ${product.qty}`, 'ok');
+          status(`CN ${product.cn}: quantitat → ${product.qty}`, 'ok');
         }
-      } else {
-        // Fallback: buscar qualsevol input number a la celÂ·la de quantitat
-        const fallbackQty = matchedRow.querySelector(
-          'td[headers="returnedQuantity"] input[type="number"]'
-        );
-        if (fallbackQty) {
-          setInputValue(fallbackQty, product.qty);
-          status(`CN ${product.cn}: quantitat â ${product.qty}`, 'ok');
-        } else if (product.qty > 1) {
-          // Pot ser un span (reasonCode=='01' amb extraQuantity>0)
-          status(`CN ${product.cn}: camp de quantitat no editable`, 'warn');
-        }
+      } else if (product.qty > 1) {
+        status(`CN ${product.cn}: camp de quantitat no editable — revisa manualment`, 'warn');
       }
       await sleep(300);
 
-      // ââ Motiu ââ
+      // ── Motiu ──
       const reasonSelect = matchedRow.querySelector(
         'select[ng-model="line.reasonCode"]'
       );
       if (reasonSelect) {
         const matched = matchReasonToOption(reasonSelect, product.reason);
         if (matched) {
-          status(`CN ${product.cn}: motiu â ${product.reason}`, 'ok');
+          status(`CN ${product.cn}: motiu → ${product.reason}`, 'ok');
         } else {
           status(`CN ${product.cn}: motiu "${product.reason}" no trobat al dropdown`, 'warn');
         }
       } else {
-        // Fallback: buscar select amb name que comenÃ§a per "reason-"
+        // Fallback: buscar select amb name que comença per "reason-"
         const fallbackSel = matchedRow.querySelector('select[name^="reason-"]');
         if (fallbackSel) {
           matchReasonToOption(fallbackSel, product.reason);
-          status(`CN ${product.cn}: motiu â ${product.reason}`, 'ok');
+          status(`CN ${product.cn}: motiu → ${product.reason}`, 'ok');
         } else {
           status(`CN ${product.cn}: dropdown de motiu no trobat`, 'warn');
         }
       }
       await sleep(300);
 
-      // Si el motiu Ã©s '02' (servido por error), pot haver-hi camp extra
-      // input[ng-model="line.receivedArticle.articleCode"] â l'ignorem per ara
+      // Si el motiu és '02' (servido por error), el portal demana el codi de l'article rebut
+      const isReason02 = (product.reason === '02' ||
+        product.reason.toUpperCase().includes('SERVIDO POR ERROR'));
+      if (isReason02) {
+        const extraInput = matchedRow.querySelector(
+          'input[ng-model="line.receivedArticle.articleCode"]'
+        );
+        if (extraInput && extraInput.offsetParent !== null) {
+          status(`CN ${product.cn}: ⚠ Motiu "Servido por error" requereix codi article rebut — revisa manualment`, 'warn');
+        }
+      }
     }
   }
 
-  /** Busca l'opciÃ³ del dropdown que coincideix amb el text del motiu i la selecciona. */
+  // Mapa de codis de motiu del portal Alliance → text esperat
+  // Permet fer match per codi directe (més fiable que per text)
+  const REASON_CODES = {
+    '01': 'NO INTERESA',
+    '02': 'SERVIDO POR ERROR',
+    '03': 'DEFECTUOSO',
+    '04': 'FECHA DE CADUCIDAD',
+    '10': 'ERROR DE PRECIO',
+    '99': 'OTROS',
+  };
+
+  // Mapa invers: text normalitzat → codi
+  const TEXT_TO_CODE = {};
+  for (const [code, text] of Object.entries(REASON_CODES)) {
+    TEXT_TO_CODE[text] = code;
+  }
+
+  /** Busca l'opció del dropdown que coincideix amb el motiu i la selecciona.
+   *  Accepta tant codi ('01') com text ('NO INTERESA').
+   */
   function matchReasonToOption(select, reasonText) {
     if (!reasonText) return false;
     const norm = reasonText.toUpperCase().trim();
 
-    // 1. CoincidÃ¨ncia exacta de text
-    for (const opt of select.options) {
+    // Filtrar opcions vàlides (descartar "Seleccione", opcions buides, etc.)
+    const validOpts = [...select.options].filter(
+      opt => opt.value && opt.text.trim()
+    );
+
+    // 0. Si ens passen un codi directe ('01', '02'...), buscar per value
+    if (/^\d{2}$/.test(norm)) {
+      for (const opt of validOpts) {
+        if (opt.value === norm) {
+          setSelectValue(select, opt.value);
+          return true;
+        }
+      }
+    }
+
+    // 1. Buscar si tenim el codi corresponent al text
+    const code = TEXT_TO_CODE[norm];
+    if (code) {
+      for (const opt of validOpts) {
+        if (opt.value === code) {
+          setSelectValue(select, opt.value);
+          return true;
+        }
+      }
+    }
+
+    // 2. Coincidència exacta de text
+    for (const opt of validOpts) {
       if (opt.text.toUpperCase().trim() === norm) {
         setSelectValue(select, opt.value);
         return true;
       }
     }
 
-    // 2. CoincidÃ¨ncia parcial (el text de l'opciÃ³ contÃ© el motiu o viceversa)
-    for (const opt of select.options) {
+    // 3. Coincidència parcial segura (evitar falsos positius)
+    for (const opt of validOpts) {
       const t = opt.text.toUpperCase().trim();
-      if (t.includes(norm) || norm.includes(t)) {
-        setSelectValue(select, opt.value);
-        return true;
+      // Només si el text complet de l'opció conté el motiu complet o viceversa
+      // i el fragment té almenys 4 caràcters (evitar matches curts)
+      if (t.length >= 4 && norm.length >= 4) {
+        if (t === norm || t.includes(norm) || norm.includes(t)) {
+          setSelectValue(select, opt.value);
+          return true;
+        }
       }
     }
 
-    // 3. CoincidÃ¨ncia per paraules clau
+    // 4. Coincidència per paraules clau (sense ambigüitat)
     const KEYWORDS = {
       'NO INTERESA': ['no interesa'],
-      'SERVIDO POR ERROR': ['servido', 'error'],
-      'DEFECTUOSO': ['defectuoso', 'defecto'],
-      'FECHA DE CADUCIDAD': ['caducidad', 'fecha'],
-      'ERROR DE PRECIO': ['precio'],
+      'SERVIDO POR ERROR': ['servido por error'],
+      'DEFECTUOSO': ['defectuoso'],
+      'FECHA DE CADUCIDAD': ['caducidad'],
+      'ERROR DE PRECIO': ['error de precio', 'precio'],
       'OTROS': ['otros'],
     };
-    const kws = KEYWORDS[norm] || [norm.toLowerCase()];
-    for (const opt of select.options) {
-      const t = opt.text.toLowerCase();
-      if (kws.some(k => t.includes(k))) {
-        setSelectValue(select, opt.value);
-        return true;
+    const kws = KEYWORDS[norm] || [];
+    if (kws.length > 0) {
+      for (const opt of validOpts) {
+        const t = opt.text.toLowerCase();
+        if (kws.some(k => t.includes(k))) {
+          setSelectValue(select, opt.value);
+          return true;
+        }
       }
     }
 
     return false;
   }
 
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
-  //  PÃGINA FARMÃCIA-TOOLS (diordes.github.io)
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
+  //  PÀGINA FARMÀCIA-TOOLS (diordes.github.io)
+  // ══════════════════════════════════════════════
 
   function initFarmaciaPage() {
-    // Anunciar presÃ¨ncia (per detecciÃ³ des de la pÃ gina)
-    // Amb @grant, cal unsafeWindow per accedir al window de la pÃ gina
+    // Anunciar presència (per detecció des de la pàgina)
+    // Amb @grant, cal unsafeWindow per accedir al window de la pàgina
     unsafeWindow.__FARMACIA_DEVOLUCIONS_SCRIPT__ = true;
     unsafeWindow.dispatchEvent(new CustomEvent('farmacia-devolucions-ready'));
-    log('Script v2.0 active on farmacia-tools page');
+    log('Script v2.0.1 active on farmacia-tools page');
 
-    // Escoltar peticions de devoluciÃ³ des de la pÃ gina
+    // Escoltar peticions de devolució des de la pàgina
     unsafeWindow.addEventListener('farmacia-start-return', (e) => {
       const detail = e.detail;
       if (!detail || !detail.products || !detail.wholesaler) {
@@ -656,9 +739,9 @@
         return;
       }
 
-      log(`Return request: ${detail.products.length} products â ${detail.wholesaler}`);
+      log(`Return request: ${detail.products.length} products → ${detail.wholesaler}`);
 
-      // Marcar que hem gestionat l'event (la pÃ gina ho comprova sincrÃ²nicament)
+      // Marcar que hem gestionat l'event (la pàgina ho comprova sincrònicament)
       unsafeWindow.__FARMACIA_RETURN_HANDLED__ = true;
 
       // Guardar dades a GM storage (sobreviu redirections ADFS)
@@ -678,29 +761,49 @@
     });
   }
 
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
-  //  PÃGINA ALLIANCE HEALTHCARE
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
+  //  PÀGINA ALLIANCE HEALTHCARE
+  // ══════════════════════════════════════════════
 
   function initAlliancePage() {
     const data = getPending();
     if (!data || data.wholesaler !== 'alliance') {
-      log('No pending Alliance return â script idle');
+      log('No pending Alliance return — script idle');
       return;
     }
 
     log(`Pending return found: ${data.products.length} product(s)`);
 
-    // Iniciar automatitzaciÃ³ amb un delay per deixar carregar la SPA
+    // Comprovar si estem a la pàgina de devolucions (o si cal navegar-hi)
+    const path = window.location.pathname;
+    const hash = window.location.hash;
+    const isDevoPage = path.includes('/devoluciones') || path.includes('/devolucions');
+
+    if (!isDevoPage) {
+      // Estem a una altra pàgina Alliance (home, login redirect, etc.)
+      // Navegar a devolucions automàticament
+      log(`Not on /devoluciones (path: ${path}) — redirecting...`);
+      window.location.href = 'https://my.alliance-healthcare.es/group/pro/devoluciones';
+      return;
+    }
+
+    // Iniciar automatització amb un delay per deixar carregar la SPA
     (async () => {
       await sleep(3000);
-      await allianceRun(data.products);
+      try {
+        await allianceRun(data.products);
+      } catch (e) {
+        log('Error during allianceRun:', e);
+        status(`Error inesperat: ${e.message}`, 'error');
+        badge('Error', '#ef4444');
+        addCloseBtn();
+      }
     })();
   }
 
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
   //  PUNT D'ENTRADA
-  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  // ══════════════════════════════════════════════
 
   const host = window.location.hostname;
 
