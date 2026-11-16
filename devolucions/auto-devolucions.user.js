@@ -1,50 +1,55 @@
 // ==UserScript==
-// @name         Farmàcia Central BCN — Auto Devolucions
+// @name         FarmÃ cia Central BCN â Auto Devolucions
 // @namespace    https://diordes.github.io/farmacia-tools
-// @version      1.1.0
-// @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare, Fedefarma, Cofares)
-// @author       Farmàcia Central BCN
+// @version      2.0.0
+// @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare)
+// @author       FarmÃ cia Central BCN
 // @match        https://my.alliance-healthcare.es/*
 // @match        https://diordes.github.io/farmacia-tools/*
-// @grant        none
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_deleteValue
+// @grant        unsafeWindow
 // @run-at       document-idle
 // ==/UserScript==
 
 (function() {
   'use strict';
 
-  // ── Configuration ──
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  //  CONFIGURACIÃ
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+
   const CONFIG = {
-    POLL_INTERVAL: 500,      // ms between DOM checks
-    MAX_WAIT: 15000,         // max ms to wait for an element
-    ACTION_DELAY: 800,       // ms delay between actions (let SPA render)
-    SEARCH_DELAY: 1500,      // ms to wait after a search for results
+    POLL_INTERVAL: 500,       // ms entre comprovacions DOM
+    MAX_WAIT: 20000,          // ms mÃ xim d'espera per un element
+    ACTION_DELAY: 1000,       // ms pausa entre accions (SPA render)
+    SEARCH_DELAY: 2000,       // ms pausa desprÃ©s d'una cerca
+    LOADING_WAIT: 15000,      // ms mÃ xim d'espera per .tsfz-loading-modal
+    PAGE_LOAD_DELAY: 6000,    // ms espera carrega "Solicitar devoluciÃ³n parcial"
+    STALE_MS: 3600000,        // 1h â dades pendents caduquen
   };
 
-  // ── Utilities ──
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  //  UTILITATS
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
 
   function log(msg, ...args) {
-    console.log(`[AutoDevolucions] ${msg}`, ...args);
+    console.log(`[AutoDevolucions v2] ${msg}`, ...args);
   }
 
   function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(r => setTimeout(r, ms));
   }
 
-  /**
-   * Wait for an element matching a selector or predicate to appear in the DOM.
-   * Returns the element, or null if timeout.
-   */
-  function waitForElement(selectorOrFn, timeout = CONFIG.MAX_WAIT) {
-    return new Promise((resolve) => {
+  /** Espera que aparegui un element (selector o funciÃ³). Retorna l'element o null. */
+  function waitForEl(selectorOrFn, timeout = CONFIG.MAX_WAIT) {
+    return new Promise(resolve => {
       const start = Date.now();
       const check = () => {
-        let el;
-        if (typeof selectorOrFn === 'function') {
-          el = selectorOrFn();
-        } else {
-          el = document.querySelector(selectorOrFn);
-        }
+        const el = typeof selectorOrFn === 'function'
+          ? selectorOrFn()
+          : document.querySelector(selectorOrFn);
         if (el) return resolve(el);
         if (Date.now() - start > timeout) return resolve(null);
         setTimeout(check, CONFIG.POLL_INTERVAL);
@@ -53,472 +58,656 @@
     });
   }
 
-  /**
-   * Wait for any element containing specific text.
-   */
-  function waitForElementWithText(tag, text, timeout = CONFIG.MAX_WAIT) {
-    return waitForElement(() => {
-      const els = document.querySelectorAll(tag);
-      for (const el of els) {
-        if (el.textContent.trim().includes(text)) return el;
-      }
-      return null;
-    }, timeout);
+  /** Espera que un element desaparegui o es faci invisible. */
+  function waitForElGone(selector, timeout = CONFIG.LOADING_WAIT) {
+    return new Promise(resolve => {
+      const start = Date.now();
+      const check = () => {
+        const el = document.querySelector(selector);
+        if (!el || el.offsetParent === null || getComputedStyle(el).display === 'none') {
+          return resolve(true);
+        }
+        if (Date.now() - start > timeout) return resolve(false);
+        setTimeout(check, CONFIG.POLL_INTERVAL);
+      };
+      check();
+    });
   }
 
-  /**
-   * Click a button/link containing specific text.
-   */
-  async function clickButtonWithText(text, tag = 'button, a, span') {
-    const el = await waitForElementWithText(tag, text);
-    if (!el) {
-      log(`ERROR: No s'ha trobat el botó amb text "${text}"`);
-      return false;
-    }
-    el.click();
-    log(`Clic a: "${text}"`);
-    await sleep(CONFIG.ACTION_DELAY);
-    return true;
-  }
-
-  /**
-   * Set the value of an input field, triggering Angular/React change events.
-   */
+  /** Posa valor a un input triggejant events Angular (input + change). */
   function setInputValue(input, value) {
-    // Clear existing value
-    input.value = '';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-
-    // Set new value
-    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+    input.focus();
+    const setter = Object.getOwnPropertyDescriptor(
       window.HTMLInputElement.prototype, 'value'
     ).set;
-    nativeInputValueSetter.call(input, value);
-
+    setter.call(input, String(value));
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
   }
 
-  /**
-   * Parse the farmacia_auto_return URL parameter.
-   * Format: cn:qty:reason,cn:qty:reason,...
-   * Returns array of { cn, qty, reason }
-   */
-  function parseReturnParams() {
-    const url = new URL(window.location.href);
-    const param = url.searchParams.get('farmacia_auto_return');
-    if (!param) return null;
+  /** Posa valor a un select triggejant change per Angular. */
+  function setSelectValue(select, value) {
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLSelectElement.prototype, 'value'
+    ).set;
+    setter.call(select, value);
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
 
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  //  GM STORAGE â dades cross-domain
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+
+  function storePending(products, wholesaler) {
+    GM_setValue('pending_return', JSON.stringify({
+      products, wholesaler, ts: Date.now()
+    }));
+    log(`Stored ${products.length} products for ${wholesaler}`);
+  }
+
+  function getPending() {
+    const raw = GM_getValue('pending_return', null);
+    if (!raw) return null;
     try {
-      return param.split(',').map(item => {
-        const [cn, qty, ...reasonParts] = item.split(':');
-        return {
-          cn: cn.trim(),
-          qty: parseInt(qty) || 1,
-          reason: reasonParts.join(':').trim() || 'NO INTERESA'
-        };
-      });
+      const d = JSON.parse(raw);
+      if (Date.now() - d.ts > CONFIG.STALE_MS) {
+        GM_deleteValue('pending_return');
+        log('Pending return expired');
+        return null;
+      }
+      return d;
     } catch (e) {
-      log('ERROR: No s\'han pogut parsejar els paràmetres', e);
+      GM_deleteValue('pending_return');
       return null;
     }
   }
 
-  // ── Status overlay ──
-
-  function createStatusOverlay() {
-    const overlay = document.createElement('div');
-    overlay.id = 'farmacia-auto-status';
-    overlay.style.cssText = `
-      position: fixed;
-      top: 16px;
-      right: 16px;
-      width: 360px;
-      background: #1e293b;
-      color: #f1f5f9;
-      border-radius: 12px;
-      padding: 16px 20px;
-      font-family: 'Inter', -apple-system, sans-serif;
-      font-size: 13px;
-      line-height: 1.5;
-      z-index: 99999;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-    `;
-    overlay.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-        <span style="font-size:18px;">🔄</span>
-        <strong style="font-size:14px;">Auto Devolucions</strong>
-        <span id="farmacia-status-badge" style="
-          margin-left:auto;
-          font-size:11px;
-          padding:2px 8px;
-          border-radius:10px;
-          background:#3b82f6;
-          color:white;
-          font-weight:600;
-        ">Processant...</span>
-      </div>
-      <div id="farmacia-status-log" style="
-        max-height: 200px;
-        overflow-y: auto;
-        font-size: 12px;
-        color: #94a3b8;
-      "></div>
-      <div id="farmacia-status-progress" style="
-        margin-top: 12px;
-        height: 4px;
-        background: #334155;
-        border-radius: 2px;
-        overflow: hidden;
-      ">
-        <div id="farmacia-status-bar" style="
-          height: 100%;
-          background: #3b82f6;
-          border-radius: 2px;
-          width: 0%;
-          transition: width 0.3s;
-        "></div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    return overlay;
+  function clearPending() {
+    GM_deleteValue('pending_return');
+    log('Cleared pending return data');
   }
 
-  function updateStatus(msg, type = 'info') {
-    const logEl = document.getElementById('farmacia-status-log');
-    if (!logEl) return;
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  //  OVERLAY D'ESTAT
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
 
-    const icons = { info: 'ℹ️', ok: '✅', warn: '⚠️', error: '❌', search: '🔍' };
-    const line = document.createElement('div');
-    line.style.marginBottom = '4px';
-    line.innerHTML = `${icons[type] || '·'} ${msg}`;
-    logEl.appendChild(line);
-    logEl.scrollTop = logEl.scrollHeight;
+  function createOverlay() {
+    const old = document.getElementById('farmacia-auto-status');
+    if (old) old.remove();
+
+    const ov = document.createElement('div');
+    ov.id = 'farmacia-auto-status';
+    ov.style.cssText = 'position:fixed;top:16px;right:16px;width:360px;background:#1e293b;color:#f1f5f9;border-radius:12px;padding:16px 20px;font-family:Inter,-apple-system,sans-serif;font-size:13px;line-height:1.5;z-index:99999;box-shadow:0 20px 40px rgba(0,0,0,0.3)';
+    ov.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="font-size:18px">ð</span>
+        <strong style="font-size:14px">Auto Devolucions v2</strong>
+        <span id="fa-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px;background:#3b82f6;color:white;font-weight:600">Processant...</span>
+      </div>
+      <div id="fa-log" style="max-height:220px;overflow-y:auto;font-size:12px;color:#94a3b8"></div>
+      <div style="margin-top:12px;height:4px;background:#334155;border-radius:2px;overflow:hidden">
+        <div id="fa-bar" style="height:100%;background:#3b82f6;border-radius:2px;width:0;transition:width 0.3s"></div>
+      </div>`;
+    document.body.appendChild(ov);
+  }
+
+  const ICONS = { info: 'â¹ï¸', ok: 'â', warn: 'â ï¸', error: 'â', search: 'ð' };
+
+  function status(msg, type = 'info') {
+    const el = document.getElementById('fa-log');
+    if (!el) return;
+    const d = document.createElement('div');
+    d.style.marginBottom = '4px';
+    d.innerHTML = `${ICONS[type] || 'Â·'} ${msg}`;
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
     log(msg);
   }
 
-  function updateProgress(current, total) {
-    const bar = document.getElementById('farmacia-status-bar');
-    if (bar) bar.style.width = `${(current / total) * 100}%`;
+  function progress(cur, total) {
+    const b = document.getElementById('fa-bar');
+    if (b) b.style.width = `${(cur / total) * 100}%`;
   }
 
-  function setStatusBadge(text, color) {
-    const badge = document.getElementById('farmacia-status-badge');
-    if (badge) {
-      badge.textContent = text;
-      badge.style.background = color;
+  function badge(text, color) {
+    const b = document.getElementById('fa-badge');
+    if (b) { b.textContent = text; b.style.background = color; }
+  }
+
+  function addCloseBtn() {
+    const ov = document.getElementById('farmacia-auto-status');
+    if (!ov) return;
+    const btn = document.createElement('button');
+    btn.textContent = 'â Tancar';
+    btn.style.cssText = 'margin-top:12px;width:100%;padding:8px;background:#334155;color:#f1f5f9;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600';
+    btn.onclick = () => ov.remove();
+    ov.appendChild(btn);
+  }
+
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  //  HELPERS PORTAL
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+
+  /** Tanca el banner de cookies OneTrust si existeix. */
+  async function dismissCookies() {
+    const btn = document.querySelector(
+      '#onetrust-reject-all-handler, .onetrust-close-btn-handler, #onetrust-accept-btn-handler'
+    );
+    if (btn) {
+      btn.click();
+      await sleep(500);
+      log('Cookie banner dismissed');
     }
   }
 
-  // ── Alliance Healthcare automation ──
+  /** Espera que el loading modal (.tsfz-loading-modal) desaparegui. */
+  async function waitLoading() {
+    await sleep(300);
+    const el = document.querySelector('.tsfz-loading-modal');
+    if (el && el.offsetParent !== null) {
+      status('Esperant cÃ rrega...', 'info');
+      await waitForElGone('.tsfz-loading-modal');
+    }
+    await sleep(500);
+  }
 
-  async function allianceAutomation(products) {
-    createStatusOverlay();
-    updateStatus(`Iniciant devolució de ${products.length} producte(s)...`);
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  //  ALLIANCE HEALTHCARE â AUTOMATITZACIÃ
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
 
-    // Step 1: Make sure we're on the returns page with product search view
-    // The URL hash should route us to #/requests/products
-    // Wait for the page to load
-    await sleep(2000);
+  async function allianceRun(products) {
+    createOverlay();
+    status(`Iniciant devoluciÃ³ de ${products.length} producte(s)...`);
 
-    // Step 2: Click "Buscar por producto" tab if not already selected
-    const searchByProductTab = await waitForElementWithText('a, button, span, li', 'Buscar por producto');
-    if (searchByProductTab) {
-      searchByProductTab.click();
-      updateStatus('Pestanya "Buscar por producto" seleccionada', 'ok');
-      await sleep(CONFIG.ACTION_DELAY);
+    await dismissCookies();
+
+    // ââ 1. Navegar a la pÃ gina de solÂ·licitud ââ
+    const hash = window.location.hash;
+    if (!hash || hash === '#/' || hash === '#') {
+      status('Navegant a "Solicitar devoluciÃ³n parcial"...', 'info');
+
+      // Buscar el botÃ³/link "Solicitar devoluciÃ³n parcial"
+      const solBtn = await waitForEl(() => {
+        const els = document.querySelectorAll('a, button, div.btn, span, li');
+        for (const el of els) {
+          if (el.textContent.trim().includes('Solicitar devoluciÃ³n parcial')) return el;
+        }
+        return null;
+      }, CONFIG.MAX_WAIT);
+
+      if (solBtn) {
+        solBtn.click();
+        status('Clic a "Solicitar devoluciÃ³n parcial"', 'ok');
+        await sleep(CONFIG.PAGE_LOAD_DELAY);
+      } else {
+        status('No s\'ha trobat "Solicitar devoluciÃ³n parcial"', 'error');
+        badge('Error', '#ef4444');
+        addCloseBtn();
+        return;
+      }
+    } else if (hash.includes('/requests/products')) {
+      status('Ja som a la pÃ gina de productes', 'ok');
+      await sleep(2000);
     } else {
-      // Try alternative — the tab might already be active
-      updateStatus('Ja estem a la vista de cerca per producte', 'info');
+      // Estem en un altre hash â esperem una mica
+      await sleep(3000);
     }
 
-    // Process each product
-    let successCount = 0;
-    let failCount = 0;
+    await dismissCookies();
+    await waitLoading();
+
+    // ââ 2. Afegir cada producte ââ
+    let ok = 0, fail = 0;
+    const added = []; // productes afegits correctament
 
     for (let i = 0; i < products.length; i++) {
-      const product = products[i];
-      updateProgress(i, products.length);
-      updateStatus(`Processant ${i + 1}/${products.length}: CN ${product.cn}`, 'search');
+      const p = products[i];
+      progress(i, products.length);
+      status(`<strong>${i + 1}/${products.length}</strong>: CN ${p.cn} Ã${p.qty}`, 'search');
 
       try {
-        const success = await allianceProcessSingleProduct(product);
+        const success = await allianceAddProduct(p, i === 0);
         if (success) {
-          successCount++;
-          updateStatus(`CN ${product.cn} afegit a la llista`, 'ok');
+          ok++;
+          added.push(p);
+          status(`CN ${p.cn} afegit â`, 'ok');
         } else {
-          failCount++;
-          updateStatus(`CN ${product.cn}: no s'ha pogut afegir`, 'error');
+          fail++;
+          status(`CN ${p.cn}: no s'ha pogut afegir`, 'error');
         }
       } catch (e) {
-        failCount++;
-        updateStatus(`CN ${product.cn}: error — ${e.message}`, 'error');
+        fail++;
+        status(`CN ${p.cn}: ${e.message}`, 'error');
+        log('Error:', e);
       }
 
-      // Small delay between products
-      if (i < products.length - 1) {
-        await sleep(CONFIG.ACTION_DELAY);
-      }
+      if (i < products.length - 1) await sleep(CONFIG.ACTION_DELAY);
     }
 
-    updateProgress(products.length, products.length);
+    progress(products.length, products.length);
 
-    // Step 3: Set return reason for all products using "Aplicar a todos"
-    if (successCount > 0 && products.length > 0) {
-      updateStatus('Aplicant motiu de devolució...', 'info');
-      await allianceSetReason(products[0].reason);
+    // ââ 3. Ajustar quantitats i motius per lÃ­nia ââ
+    if (added.length > 0) {
+      status('Ajustant quantitats i motius per lÃ­nia...', 'info');
+      await sleep(2000); // esperar que el DOM es renderitzi
+      await allianceSetQtyAndReason(added);
     }
 
-    // Final status
-    if (failCount === 0) {
-      setStatusBadge('Completat', '#22c55e');
-      updateStatus(`✨ ${successCount} producte(s) afegit(s). Revisa i clica "Enviar devolución" manualment.`, 'ok');
+    // ââ 4. Resum final ââ
+    if (fail === 0) {
+      badge('Completat', '#22c55e');
+      status(`â¨ ${ok} producte(s) llestos. Revisa i clica "Enviar devoluciÃ³n" manualment.`, 'ok');
     } else {
-      setStatusBadge('Parcial', '#f59e0b');
-      updateStatus(`${successCount} afegit(s), ${failCount} error(s). Revisa la llista.`, 'warn');
+      badge('Parcial', '#f59e0b');
+      status(`${ok} afegit(s), ${fail} error(s). Revisa la llista.`, 'warn');
     }
 
-    // Add a close button
-    const overlay = document.getElementById('farmacia-auto-status');
-    if (overlay) {
-      const closeBtn = document.createElement('button');
-      closeBtn.textContent = '✕ Tancar';
-      closeBtn.style.cssText = `
-        margin-top: 12px;
-        width: 100%;
-        padding: 8px;
-        background: #334155;
-        color: #f1f5f9;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 12px;
-        font-weight: 600;
-      `;
-      closeBtn.onclick = () => overlay.remove();
-      overlay.appendChild(closeBtn);
-    }
-
-    // Clean URL params
-    const url = new URL(window.location.href);
-    url.searchParams.delete('farmacia_auto_return');
-    window.history.replaceState({}, '', url.toString());
+    addCloseBtn();
+    clearPending();
   }
 
-  async function allianceProcessSingleProduct(product) {
-    // Find the product code input field — Alliance uses #productCode
-    const codeInput = await waitForElement(() => {
-      // Primary: the known ID
-      const byId = document.getElementById('productCode');
-      if (byId) return byId;
-      // Fallback: any input whose id/name contains "productCode" or "codigo"
-      const inputs = document.querySelectorAll('input[type="text"], input[type="search"], input:not([type])');
-      for (const input of inputs) {
-        const id = (input.id || '').toLowerCase();
-        const name = (input.name || '').toLowerCase();
-        const placeholder = (input.placeholder || '').toLowerCase();
-        if (id.includes('productcode') || id.includes('codigo') ||
-            name.includes('productcode') || name.includes('codigo') ||
-            placeholder.includes('código') || placeholder.includes('codigo')) {
-          return input;
-        }
-      }
-      return null;
-    });
+  // ââ Navegar fins al pas de cerca dins el modal ââ
 
-    if (!codeInput) {
-      log('No s\'ha trobat el camp de codi (#productCode)');
+  async function navigateToSearch() {
+    // Cas 1: ja tenim l'input CN al modal
+    let cnInput = document.querySelector('.modal #productCode');
+    if (cnInput && cnInput.offsetParent !== null) return cnInput;
+
+    // Cas 2: estem al modal perÃ² en un altre pas â "Seleccionar otro producto"
+    const prevBtn = document.querySelector('div.btn[ng-click="previousStep()"]');
+    if (prevBtn && prevBtn.offsetParent !== null) {
+      prevBtn.click();
+      log('Clicked "Seleccionar otro producto"');
+      await sleep(CONFIG.ACTION_DELAY);
+      cnInput = await waitForEl('.modal #productCode', 5000);
+      if (cnInput) return cnInput;
+    }
+
+    // Cas 3: modal tancat â obrir amb el botÃ³ de cerca
+    const searchBtn = await waitForEl(
+      '#search-buttons button[ng-click="searchByProduct()"]',
+      CONFIG.MAX_WAIT
+    );
+    if (!searchBtn) {
+      // Fallback: qualsevol botÃ³ amb text "Buscar por producto"
+      const fallback = await waitForEl(() => {
+        const els = document.querySelectorAll('button, a, div.btn');
+        for (const el of els) {
+          if (el.textContent.trim().includes('Buscar por producto')) return el;
+        }
+        return null;
+      }, 5000);
+      if (fallback) {
+        fallback.click();
+      } else {
+        return null;
+      }
+    } else {
+      searchBtn.click();
+    }
+
+    log('Opened search modal');
+    await sleep(CONFIG.ACTION_DELAY);
+    return await waitForEl('.modal #productCode');
+  }
+
+  // ââ Afegir un producte (cerca â selecciÃ³ â albarÃ  â afegir) ââ
+
+  async function allianceAddProduct(product, isFirst) {
+    // ââ Pas A: Arribar a l'input de cerca ââ
+    const cnInput = await navigateToSearch();
+    if (!cnInput) {
+      log('Cannot find product search input (#productCode)');
       return false;
     }
 
-    // Clear and type the CN
-    codeInput.focus();
-    setInputValue(codeInput, product.cn);
+    // Netejar camp anterior
+    cnInput.focus();
+    cnInput.value = '';
+    cnInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(200);
+
+    // Escriure el CN
+    setInputValue(cnInput, product.cn);
     await sleep(300);
 
-    // Click search — Alliance uses input[type=submit]
-    const submitBtn = await waitForElement(() => {
-      // Primary: submit button inside the same form
-      const form = codeInput.closest('form');
-      if (form) {
-        const sub = form.querySelector('input[type="submit"], button[type="submit"]');
-        if (sub) return sub;
-      }
-      // Fallback: any submit input on the page
-      const sub = document.querySelector('input[type="submit"]');
-      if (sub) return sub;
-      // Last resort: button with text "Buscar"
-      const btns = document.querySelectorAll('button');
-      for (const b of btns) {
-        if (b.textContent.trim().toLowerCase().includes('buscar')) return b;
-      }
-      return null;
-    });
-
-    if (submitBtn) {
-      submitBtn.click();
-      log(`Clic a Buscar per CN ${product.cn}`);
-      await sleep(CONFIG.ACTION_DELAY);
+    // ââ Pas B: Clicar "Buscar" (dins el modal) ââ
+    const buscarBtn = document.querySelector(
+      '.modal input[type="submit"][value="Buscar"]'
+    );
+    if (buscarBtn) {
+      buscarBtn.click();
+      log(`Search click for CN ${product.cn}`);
     } else {
-      // Try submitting the form directly or pressing Enter
-      const form = codeInput.closest('form');
-      if (form) {
-        form.submit();
-      } else {
-        codeInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-        codeInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
-      }
-      log(`Submit per Enter/form per CN ${product.cn}`);
-      await sleep(CONFIG.ACTION_DELAY);
+      // Fallback: ng-enter="find()" â Enter key
+      cnInput.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter', keyCode: 13, which: 13, bubbles: true
+      }));
+      cnInput.dispatchEvent(new KeyboardEvent('keyup', {
+        key: 'Enter', keyCode: 13, which: 13, bubbles: true
+      }));
+      log(`Search Enter for CN ${product.cn}`);
     }
 
-    // Wait for search results
     await sleep(CONFIG.SEARCH_DELAY);
+    await waitLoading();
 
-    // Check for "No existen resultados"
-    const noResults = document.body.textContent.includes('No existen resultados');
-    if (noResults) {
-      log(`CN ${product.cn}: no results found`);
+    // ââ Pas C: Comprovar resultats ââ
+    const modal = document.querySelector('.tsfz-lg-modal, .modal');
+    if (modal && modal.textContent.includes('No existen resultados')) {
+      log(`CN ${product.cn}: no results`);
+      status(`CN ${product.cn}: no s'ha trobat al portal`, 'warn');
+      // Tancar modal o tornar enrere
+      const closeBtn = modal.querySelector('.close, button[aria-label="Close"], .modal-header button');
+      if (closeBtn) closeBtn.click();
       return false;
     }
 
-    // Click the ">" or "add" button on the first result row
-    // In Alliance portal, it's a ">" icon/button in the result table
-    const addBtn = await waitForElement(() => {
-      // Look for the result row's action button
-      const btns = document.querySelectorAll('button, a, span');
-      for (const btn of btns) {
-        const text = btn.textContent.trim();
-        const cls = (btn.className || '').toLowerCase();
-        // Arrow/chevron button or "Seleccionar" or ">" in result row
-        if (text === '>' || text === '›' || text === '▶' ||
-            cls.includes('chevron') || cls.includes('arrow') ||
-            cls.includes('select') || cls.includes('add-product') ||
-            (btn.tagName === 'I' && (cls.includes('angle-right') || cls.includes('chevron')))) {
-          return btn;
+    // ââ Pas D: Clicar la fila del resultat ââ
+    // Intentar trobar la fila amb el CN exacte
+    const resultCell = await waitForEl(() => {
+      const rows = document.querySelectorAll(
+        '.modal tbody.table-data tr[ng-repeat="product in articleList"]'
+      );
+      // Primer: buscar coincidÃ¨ncia exacta de CN
+      for (const row of rows) {
+        const firstCell = row.querySelector('td');
+        if (firstCell && firstCell.textContent.trim() === product.cn) {
+          return row.querySelector('td[ng-click="nextStep(product)"]') || row;
         }
       }
-      // Try finding icon buttons
-      const icons = document.querySelectorAll('i.fa-angle-right, i.fa-chevron-right, .icon-arrow-right, [class*="angle-right"]');
-      for (const icon of icons) {
-        return icon.closest('button') || icon.closest('a') || icon;
-      }
-      return null;
-    });
+      // Segon: primera fila amb td clicable
+      const anyCell = document.querySelector(
+        '.modal tbody.table-data tr[ng-repeat="product in articleList"] td[ng-click="nextStep(product)"]'
+      );
+      if (anyCell) return anyCell;
+      // Tercer: primera fila del resultat
+      return document.querySelector('.modal tbody.table-data tr');
+    }, CONFIG.MAX_WAIT);
 
-    if (addBtn) {
-      addBtn.click();
-      log(`Clicked result arrow for CN ${product.cn}`);
-      await sleep(CONFIG.ACTION_DELAY);
-    } else {
-      // Try clicking on the first result row itself
-      const resultRow = document.querySelector('tr.clickable, tr[ng-click], .result-row, table tbody tr');
-      if (resultRow) {
-        resultRow.click();
-        await sleep(CONFIG.ACTION_DELAY);
-      } else {
-        log(`No result row found for CN ${product.cn}`);
-        return false;
-      }
+    if (!resultCell) {
+      log(`CN ${product.cn}: no result rows found`);
+      return false;
     }
 
-    // After clicking the result, we should see delivery notes (albaranes)
-    await sleep(CONFIG.SEARCH_DELAY);
+    resultCell.click();
+    log(`Clicked result for CN ${product.cn}`);
 
-    // Select the first delivery note checkbox
-    const checkbox = await waitForElement(() => {
-      const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-      // Skip "select all" checkboxes, look for individual ones
-      for (const cb of checkboxes) {
-        if (!cb.checked) return cb;
-      }
-      return checkboxes[0] || null;
-    });
+    // Esperar loading modal
+    await waitLoading();
 
-    if (checkbox && !checkbox.checked) {
+    // ââ Pas E: Seleccionar albarÃ  ââ
+    // Esperar que aparegui la llista d'albarans
+    const checkbox = await waitForEl(
+      'tbody.table-data tr[ng-repeat="returnLine in returnLines"]:not(.error) input[type="checkbox"][ng-model="returnLine.$$checked"]:not([disabled])'
+    );
+
+    if (!checkbox) {
+      log(`CN ${product.cn}: no valid albarÃ  checkbox found`);
+      // Potser no hi ha albarans disponibles
+      status(`CN ${product.cn}: cap albarÃ  disponible`, 'warn');
+      return false;
+    }
+
+    if (!checkbox.checked) {
       checkbox.click();
-      log('Albarà seleccionat');
+      log('AlbarÃ  checkbox clicked');
       await sleep(CONFIG.ACTION_DELAY);
     }
 
-    // Click "Añadir productos a la lista"
-    const addToListClicked = await clickButtonWithText('Añadir productos a la lista');
-    if (!addToListClicked) {
-      // Try alternative button texts
-      const altClicked = await clickButtonWithText('Añadir');
-      if (!altClicked) {
-        log('No s\'ha pogut afegir a la llista');
+    // ââ Pas F: Clicar "AÃ±adir productos a la lista" ââ
+    // NOTA: Ã©s un DIV, no un button!
+    const addDiv = await waitForEl(
+      '.modal-footer div.btn.btn-primary[ng-click="nextStep()"]'
+    );
+
+    if (!addDiv) {
+      // Fallback: qualsevol element amb text "AÃ±adir productos"
+      const fallback = await waitForEl(() => {
+        const els = document.querySelectorAll('.modal-footer div.btn, .modal-footer button');
+        for (const el of els) {
+          if (el.textContent.trim().includes('AÃ±adir productos')) return el;
+        }
+        return null;
+      }, 5000);
+
+      if (fallback) {
+        fallback.click();
+      } else {
+        log('Cannot find "AÃ±adir productos" button/div');
         return false;
       }
+    } else {
+      // Esperar que no estigui desactivat
+      let tries = 0;
+      while (addDiv.classList.contains('disabled') && tries < 15) {
+        await sleep(300);
+        tries++;
+      }
+      addDiv.click();
     }
 
+    log('Clicked "AÃ±adir productos a la lista"');
     await sleep(CONFIG.ACTION_DELAY);
+    await waitLoading();
+
     return true;
   }
 
-  async function allianceSetReason(reason) {
-    // Look for the "Motivo" or reason dropdown
-    const selects = document.querySelectorAll('select');
-    for (const select of selects) {
-      const label = select.getAttribute('aria-label') || '';
-      const name = select.name || '';
-      const id = select.id || '';
-      const combined = (label + name + id).toLowerCase();
+  // ââ Ajustar quantitat i motiu per cada lÃ­nia de producte ââ
 
-      if (combined.includes('motiv') || combined.includes('reason') || combined.includes('causa')) {
-        // Set the value
-        for (const opt of select.options) {
-          if (opt.text.toUpperCase().includes(reason.toUpperCase()) ||
-              opt.value.toUpperCase().includes(reason.toUpperCase())) {
-            select.value = opt.value;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            updateStatus(`Motiu establert: ${reason}`, 'ok');
-            break;
-          }
-        }
-        break;
+  async function allianceSetQtyAndReason(products) {
+    // Les lÃ­nies de producte apareixen dins div.tsfz-product-section
+    const sections = document.querySelectorAll('div.tsfz-product-section');
+    if (sections.length === 0) {
+      // Fallback: buscar la taula directament
+      status('Cercant taula de productes...', 'info');
+      await sleep(2000);
+    }
+
+    // Recollir totes les files de productes de totes les seccions
+    const allRows = document.querySelectorAll(
+      'div.tsfz-product-section table.tsfz-products-table tbody tr'
+    );
+
+    if (allRows.length === 0) {
+      // Fallback mÃ©s ampli
+      const anyRows = document.querySelectorAll('table.tsfz-products-table tbody tr');
+      if (anyRows.length === 0) {
+        status('No s\'han trobat lÃ­nies de producte a la pÃ gina', 'warn');
+        return;
       }
     }
 
-    // Try clicking "Aplicar a todos" if available
-    await sleep(CONFIG.ACTION_DELAY);
-    const applyAll = await waitForElementWithText('button, a, span', 'Aplicar a todos', 3000);
-    if (applyAll) {
-      applyAll.click();
-      updateStatus('Motiu aplicat a tots els productes', 'ok');
+    const rows = allRows.length > 0
+      ? allRows
+      : document.querySelectorAll('table.tsfz-products-table tbody tr');
+
+    log(`Found ${rows.length} product row(s) across sections`);
+
+    for (const product of products) {
+      // Trobar la fila que contÃ© el CN d'aquest producte
+      let matchedRow = null;
+      for (const row of rows) {
+        const text = row.textContent || '';
+        if (text.includes(product.cn)) {
+          matchedRow = row;
+          break;
+        }
+      }
+
+      if (!matchedRow) {
+        status(`CN ${product.cn}: fila no trobada a la llista`, 'warn');
+        continue;
+      }
+
+      // ââ Quantitat ââ
+      const qtyInput = matchedRow.querySelector(
+        'td[headers="returnedQuantity"] input[type="number"][ng-model="line.quantity"]'
+      );
+      if (qtyInput) {
+        if (product.qty > 1 || qtyInput.value !== String(product.qty)) {
+          setInputValue(qtyInput, product.qty);
+          status(`CN ${product.cn}: quantitat â ${product.qty}`, 'ok');
+        }
+      } else {
+        // Fallback: buscar qualsevol input number a la celÂ·la de quantitat
+        const fallbackQty = matchedRow.querySelector(
+          'td[headers="returnedQuantity"] input[type="number"]'
+        );
+        if (fallbackQty) {
+          setInputValue(fallbackQty, product.qty);
+          status(`CN ${product.cn}: quantitat â ${product.qty}`, 'ok');
+        } else if (product.qty > 1) {
+          // Pot ser un span (reasonCode=='01' amb extraQuantity>0)
+          status(`CN ${product.cn}: camp de quantitat no editable`, 'warn');
+        }
+      }
+      await sleep(300);
+
+      // ââ Motiu ââ
+      const reasonSelect = matchedRow.querySelector(
+        'select[ng-model="line.reasonCode"]'
+      );
+      if (reasonSelect) {
+        const matched = matchReasonToOption(reasonSelect, product.reason);
+        if (matched) {
+          status(`CN ${product.cn}: motiu â ${product.reason}`, 'ok');
+        } else {
+          status(`CN ${product.cn}: motiu "${product.reason}" no trobat al dropdown`, 'warn');
+        }
+      } else {
+        // Fallback: buscar select amb name que comenÃ§a per "reason-"
+        const fallbackSel = matchedRow.querySelector('select[name^="reason-"]');
+        if (fallbackSel) {
+          matchReasonToOption(fallbackSel, product.reason);
+          status(`CN ${product.cn}: motiu â ${product.reason}`, 'ok');
+        } else {
+          status(`CN ${product.cn}: dropdown de motiu no trobat`, 'warn');
+        }
+      }
+      await sleep(300);
+
+      // Si el motiu Ã©s '02' (servido por error), pot haver-hi camp extra
+      // input[ng-model="line.receivedArticle.articleCode"] â l'ignorem per ara
     }
   }
 
-  // ── Main entry point ──
+  /** Busca l'opciÃ³ del dropdown que coincideix amb el text del motiu i la selecciona. */
+  function matchReasonToOption(select, reasonText) {
+    if (!reasonText) return false;
+    const norm = reasonText.toUpperCase().trim();
 
-  function init() {
-    const products = parseReturnParams();
-    if (!products || products.length === 0) {
-      // No auto-return params — just announce the script is present
-      // This allows the farmacia-tools page to detect it
+    // 1. CoincidÃ¨ncia exacta de text
+    for (const opt of select.options) {
+      if (opt.text.toUpperCase().trim() === norm) {
+        setSelectValue(select, opt.value);
+        return true;
+      }
+    }
+
+    // 2. CoincidÃ¨ncia parcial (el text de l'opciÃ³ contÃ© el motiu o viceversa)
+    for (const opt of select.options) {
+      const t = opt.text.toUpperCase().trim();
+      if (t.includes(norm) || norm.includes(t)) {
+        setSelectValue(select, opt.value);
+        return true;
+      }
+    }
+
+    // 3. CoincidÃ¨ncia per paraules clau
+    const KEYWORDS = {
+      'NO INTERESA': ['no interesa'],
+      'SERVIDO POR ERROR': ['servido', 'error'],
+      'DEFECTUOSO': ['defectuoso', 'defecto'],
+      'FECHA DE CADUCIDAD': ['caducidad', 'fecha'],
+      'ERROR DE PRECIO': ['precio'],
+      'OTROS': ['otros'],
+    };
+    const kws = KEYWORDS[norm] || [norm.toLowerCase()];
+    for (const opt of select.options) {
+      const t = opt.text.toLowerCase();
+      if (kws.some(k => t.includes(k))) {
+        setSelectValue(select, opt.value);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  //  PÃGINA FARMÃCIA-TOOLS (diordes.github.io)
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+
+  function initFarmaciaPage() {
+    // Anunciar presÃ¨ncia (per detecciÃ³ des de la pÃ gina)
+    // Amb @grant, cal unsafeWindow per accedir al window de la pÃ gina
+    unsafeWindow.__FARMACIA_DEVOLUCIONS_SCRIPT__ = true;
+    unsafeWindow.dispatchEvent(new CustomEvent('farmacia-devolucions-ready'));
+    log('Script v2.0 active on farmacia-tools page');
+
+    // Escoltar peticions de devoluciÃ³ des de la pÃ gina
+    unsafeWindow.addEventListener('farmacia-start-return', (e) => {
+      const detail = e.detail;
+      if (!detail || !detail.products || !detail.wholesaler) {
+        log('Invalid event detail', detail);
+        return;
+      }
+
+      log(`Return request: ${detail.products.length} products â ${detail.wholesaler}`);
+
+      // Marcar que hem gestionat l'event (la pÃ gina ho comprova sincrÃ²nicament)
+      unsafeWindow.__FARMACIA_RETURN_HANDLED__ = true;
+
+      // Guardar dades a GM storage (sobreviu redirections ADFS)
+      storePending(detail.products, detail.wholesaler);
+
+      // Obrir el portal en una nova pestanya
+      const urls = {
+        alliance: 'https://my.alliance-healthcare.es/group/pro/devoluciones'
+      };
+      const url = urls[detail.wholesaler];
+      if (url) {
+        window.open(url, '_blank');
+        log(`Opened portal: ${url}`);
+      } else {
+        log(`Unknown wholesaler: ${detail.wholesaler}`);
+      }
+    });
+  }
+
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  //  PÃGINA ALLIANCE HEALTHCARE
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+
+  function initAlliancePage() {
+    const data = getPending();
+    if (!data || data.wholesaler !== 'alliance') {
+      log('No pending Alliance return â script idle');
       return;
     }
 
-    log(`Auto-return detected: ${products.length} product(s)`);
+    log(`Pending return found: ${data.products.length} product(s)`);
 
-    // Wait for the Alliance portal SPA to fully load
-    const startAutomation = async () => {
-      // Wait for page to be ready (SPA hash routing)
+    // Iniciar automatitzaciÃ³ amb un delay per deixar carregar la SPA
+    (async () => {
       await sleep(3000);
-      await allianceAutomation(products);
-    };
-
-    // Start after a short delay to let the SPA initialize
-    startAutomation();
+      await allianceRun(data.products);
+    })();
   }
 
-  // Run
-  init();
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
+  //  PUNT D'ENTRADA
+  // ââââââââââââââââââââââââââââââââââââââââââââââ
 
-  // Announce script presence for detection by farmacia-tools page
-  window.__FARMACIA_DEVOLUCIONS_SCRIPT__ = true;
-  window.dispatchEvent(new CustomEvent('farmacia-devolucions-ready'));
+  const host = window.location.hostname;
+
+  if (host === 'diordes.github.io') {
+    initFarmaciaPage();
+  } else if (host === 'my.alliance-healthcare.es') {
+    initAlliancePage();
+  }
 
 })();
