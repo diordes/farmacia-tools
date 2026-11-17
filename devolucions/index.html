@@ -677,7 +677,9 @@
       if (window.__FARMACIA_DEVOLUCIONS_SCRIPT__) {
         scriptDetected = true;
         el.innerHTML = '<span class="status-badge status-ok">✓ Script instal·lat i detectat</span>';
-      } else if (!scriptDetected) {
+      } else if (scriptDetected) {
+        el.innerHTML = '<span class="status-badge status-ok">✓ Script marcat com instal·lat</span>';
+      } else {
         el.innerHTML = '<span class="status-badge status-missing">⚠ Script no detectat</span>' +
           '<div style="margin-top:8px;font-size:0.82rem;color:var(--text-secondary)">' +
           'Si ja l\'has instal·lat, <a href="#" onclick="markInstalled(event)">clica aquí per confirmar</a>.</div>';
