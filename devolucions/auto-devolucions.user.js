@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Farmàcia Central BCN — Auto Devolucions
 // @namespace    https://diordes.github.io/farmacia-tools
-// @version      2.0.4
+// @version      2.0.5
 // @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare)
 // @author       Farmàcia Central BCN
 // @match        https://my.alliance-healthcare.es/*
@@ -102,11 +102,11 @@
   //  GM STORAGE — dades cross-domain
   // ══════════════════════════════════════════════
 
-  function storePending(products, wholesaler) {
+  function storePending(products, wholesaler, options = {}) {
     GM_setValue('pending_return', JSON.stringify({
-      products, wholesaler, ts: Date.now()
+      products, wholesaler, options, ts: Date.now()
     }));
-    log(`Stored ${products.length} products for ${wholesaler}`);
+    log(`Stored ${products.length} products for ${wholesaler} (options: ${JSON.stringify(options)})`);
   }
 
   function getPending() {
@@ -119,6 +119,8 @@
         log('Pending return expired');
         return null;
       }
+      // Assegurar que options existeix
+      if (!d.options) d.options = {};
       return d;
     } catch (e) {
       GM_deleteValue('pending_return');
@@ -145,7 +147,7 @@
     ov.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">🔄</span>
-        <strong style="font-size:14px">Auto Devolucions v2.0.4</strong>
+        <strong style="font-size:14px">Auto Devolucions v2.0.5</strong>
         <span id="fa-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px;background:#3b82f6;color:white;font-weight:600">Processant...</span>
       </div>
       <div id="fa-log" style="max-height:220px;overflow-y:auto;font-size:12px;color:#94a3b8"></div>
@@ -155,7 +157,7 @@
     document.body.appendChild(ov);
   }
 
-  const ICONS = { info: 'ℹ️', ok: '✅', warn: '⚠️', error: '❌', search: '🔍' };
+  const ICONS = { info: 'ℹ️', ok: '✅', warn: '⚠️', error: '❌', search: '🔍', wait: '⏳' };
 
   function status(msg, type = 'info') {
     const el = document.getElementById('fa-log');
@@ -299,9 +301,14 @@
 
     // ── 3. Ajustar quantitats i motius per línia ──
     if (added.length > 0) {
-      status('Ajustant quantitats i motius per línia...', 'info');
+      const opts = data.options || {};
+      if (opts.skipQtyReason) {
+        status('⏸ Revisa quantitat i motiu de cada línia manualment', 'wait');
+      } else {
+        status('Ajustant quantitats i motius per línia...', 'info');
+      }
       await sleep(2000); // esperar que el DOM es renderitzi
-      await allianceSetQtyAndReason(added);
+      await allianceSetQtyAndReason(added, opts);
     }
 
     // ── 4. Resum final ──
@@ -533,6 +540,33 @@
       return false;
     }
 
+    // Comprovar si cal selecció manual d'albarà
+    const pending = getPending();
+    const manualAlbara = pending && pending.options && pending.options.manualAlbara;
+
+    if (manualAlbara) {
+      log(`CN ${product.cn}: waiting for manual albarà selection`);
+      status(`CN ${product.cn}: <strong>selecciona l'albarà manualment</strong> i clica "Añadir productos"`, 'wait');
+      // Esperar a que l'usuari seleccioni i avanci
+      await new Promise(resolve => {
+        const checkDone = () => {
+          const stillOnAlbara = document.querySelector(
+            'tbody.table-data tr[ng-repeat="returnLine in returnLines"]'
+          );
+          if (!stillOnAlbara || stillOnAlbara.offsetParent === null) {
+            resolve();
+            return;
+          }
+          setTimeout(checkDone, CONFIG.POLL_INTERVAL);
+        };
+        checkDone();
+      });
+      log(`CN ${product.cn}: manual albarà selection done`);
+      await sleep(CONFIG.ACTION_DELAY);
+      await waitLoading();
+      return true;
+    }
+
     if (!checkbox.checked) {
       checkbox.click();
       log('Albarà checkbox clicked');
@@ -581,7 +615,14 @@
 
   // ── Ajustar quantitat i motiu per cada línia de producte ──
 
-  async function allianceSetQtyAndReason(products) {
+  async function allianceSetQtyAndReason(products, options = {}) {
+    // Si skipQtyReason està actiu, no omplir quantitat ni motiu
+    if (options.skipQtyReason) {
+      log('skipQtyReason actiu: quantitat i motiu es deixen per revisió manual');
+      status('⏸ Quantitat i motiu: revisa i omple manualment cada línia', 'wait');
+      return;
+    }
+
     // Les línies de producte apareixen dins div.tsfz-product-section
     const sections = document.querySelectorAll('div.tsfz-product-section');
     if (sections.length === 0) {
@@ -782,8 +823,8 @@
 
   function initFarmaciaPage() {
     // Anunciar presència — DOM attribute (funciona sempre, compartit entre sandbox i pàgina)
-    document.documentElement.setAttribute('data-farmacia-script', '2.0.4');
-    log('Script v2.0.4 active on farmacia-tools page');
+    document.documentElement.setAttribute('data-farmacia-script', '2.0.5');
+    log('Script v2.0.5 active on farmacia-tools page');
 
     // Fallback: unsafeWindow global (pot fallar en Chrome nou + Tampermonkey sandbox)
     try { unsafeWindow.__FARMACIA_DEVOLUCIONS_SCRIPT__ = true; } catch(e) {
@@ -809,7 +850,7 @@
       try { unsafeWindow.__FARMACIA_RETURN_HANDLED__ = true; } catch(e) {}
 
       // Guardar dades a GM storage (sobreviu redirections ADFS)
-      storePending(detail.products, detail.wholesaler);
+      storePending(detail.products, detail.wholesaler, detail.options || {});
 
       // Obrir el portal en una nova pestanya
       const urls = {
