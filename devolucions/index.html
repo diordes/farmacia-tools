@@ -690,9 +690,16 @@
     let scriptDetected = false;
     function checkUserscript() {
       const el = document.getElementById('scriptStatus');
-      if (window.__FARMACIA_DEVOLUCIONS_SCRIPT__) {
+      // Mètode 1: DOM attribute (funciona sempre, fins i tot amb sandbox)
+      const domVersion = document.documentElement.getAttribute('data-farmacia-script');
+      // Mètode 2: window global (fallback clàssic amb unsafeWindow)
+      const globalDetected = window.__FARMACIA_DEVOLUCIONS_SCRIPT__;
+
+      if (domVersion || globalDetected) {
         scriptDetected = true;
-        el.innerHTML = '<span class="status-badge status-ok">✓ Script instal·lat i detectat</span>';
+        const ver = domVersion || '?';
+        el.innerHTML = '<span class="status-badge status-ok">✓ Script connectat (v' + ver + ')</span>';
+        try { localStorage.setItem('farmacia_script_installed', '1'); } catch(e) {}
       } else if (scriptDetected) {
         el.innerHTML = '<span class="status-badge status-ok">✓ Script marcat com instal·lat</span>';
       } else {
@@ -719,6 +726,7 @@
     setTimeout(checkUserscript, 500);
     setTimeout(checkUserscript, 2000);
     setTimeout(checkUserscript, 4000);
+    setInterval(checkUserscript, 2000);
     // Listen for userscript announcing itself
     window.addEventListener('farmacia-devolucions-ready', checkUserscript);
 
