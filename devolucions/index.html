@@ -426,6 +426,16 @@
             </select>
           </div>
         </div>
+        <div class="options-row" style="margin-top:8px;gap:16px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;cursor:pointer">
+            <input type="checkbox" id="chkManualAlbara">
+            Selecció manual d'albarà
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;cursor:pointer">
+            <input type="checkbox" id="chkSkipQtyReason" checked>
+            No omplir quantitat/motiu (revisió manual)
+          </label>
+        </div>
       </div>
 
       <!-- Product list -->
@@ -625,9 +635,15 @@
       }));
 
       // Intentar via userscript v2.0+: dispatch event → script guarda a GM → obre portal
+      // Opcions de control
+      const options = {
+        manualAlbara: document.getElementById('chkManualAlbara').checked,
+        skipQtyReason: document.getElementById('chkSkipQtyReason').checked
+      };
+
       window.__FARMACIA_RETURN_HANDLED__ = false;
       window.dispatchEvent(new CustomEvent('farmacia-start-return', {
-        detail: { products: portalProducts, wholesaler }
+        detail: { products: portalProducts, wholesaler, options }
       }));
 
       if (window.__FARMACIA_RETURN_HANDLED__) {
