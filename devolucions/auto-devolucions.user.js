@@ -931,8 +931,8 @@
 
   function initFarmaciaPage() {
     // Anunciar presència — DOM attribute (funciona sempre, compartit entre sandbox i pàgina)
-    document.documentElement.setAttribute('data-farmacia-script', '2.0.5');
-    log('Script v2.0.5 active on farmacia-tools page');
+    document.documentElement.setAttribute('data-farmacia-script', '2.0.6');
+    log('Script v2.0.6 active on farmacia-tools page');
 
     // Fallback: unsafeWindow global (pot fallar en Chrome nou + Tampermonkey sandbox)
     try { unsafeWindow.__FARMACIA_DEVOLUCIONS_SCRIPT__ = true; } catch(e) {
