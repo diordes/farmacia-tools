@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Farmàcia Central BCN — Auto Devolucions
 // @namespace    https://diordes.github.io/farmacia-tools
-// @version      2.0.5
+// @version      2.0.6
 // @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare)
 // @author       Farmàcia Central BCN
 // @match        https://my.alliance-healthcare.es/*
@@ -38,11 +38,37 @@
   // ══════════════════════════════════════════════
 
   function log(msg, ...args) {
-    console.log(`[AutoDevolucions v2] ${msg}`, ...args);
+    console.log(`[AutoDevolucions v2.0.6] ${msg}`, ...args);
   }
 
   function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
+  }
+
+  function getAngular() {
+    try { return (typeof unsafeWindow !== 'undefined' && unsafeWindow.angular) || window.angular || null; }
+    catch (e) { return null; }
+  }
+
+  /** Línia de diagnòstic per quan alguna cosa falla */
+  function debugState(where) {
+    try {
+      const btns = document.querySelectorAll('[ng-click="searchByProduct()"]');
+      const vis = [...btns].filter(isVisible).length;
+      const load = document.querySelector('.tsfz-loading-modal');
+      const modals = [...document.querySelectorAll('.modal')].filter(isVisible).length;
+      status(`🔧 [${where}] hash=<code>${location.hash || '(buit)'}</code> · #search-buttons=${document.querySelectorAll('#search-buttons').length} · searchByProduct=${btns.length} (visibles ${vis}) · #productCode=${document.querySelectorAll('#productCode').length} · loading=${load ? (isVisible(load) ? 'visible' : 'amagat') : 'no'} · modals visibles=${modals} · angular=${getAngular() ? 'sí' : 'no'}`, 'warn');
+      const h = document.querySelector('h1, h2, .page-title');
+      if (h) status(`🔧 títol pàgina: ${(h.textContent || '').trim().slice(0, 80)}`, 'warn');
+    } catch (e) { log('debugState error', e); }
+  }
+
+  /** Visible de debò? (offsetParent és null per a elements position:fixed -> modals/overlays) */
+  function isVisible(el) {
+    if (!el) return false;
+    if (!el.getClientRects || el.getClientRects().length === 0) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== 'none' && cs.visibility !== 'hidden';
   }
 
   /** Espera que aparegui un element (selector o funció). Retorna l'element o null. */
@@ -67,7 +93,7 @@
       const start = Date.now();
       const check = () => {
         const el = document.querySelector(selector);
-        if (!el || el.offsetParent === null || getComputedStyle(el).display === 'none') {
+        if (!el || !isVisible(el)) {
           return resolve(true);
         }
         if (Date.now() - start > timeout) return resolve(false);
@@ -87,6 +113,19 @@
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+    // Fallback Angular: si el model no s'ha enterat, forçar-lo via ngModelController
+    try {
+      const ng = getAngular();
+      if (ng) {
+        const ctrl = ng.element(input).controller('ngModel');
+        if (ctrl && String(ctrl.$viewValue) !== String(value)) {
+          const scope = ng.element(input).scope();
+          const apply = () => { ctrl.$setViewValue(String(value)); ctrl.$render(); };
+          if (scope && scope.$root && !scope.$root.$$phase) scope.$apply(apply); else apply();
+          log('setInputValue: Angular $setViewValue fallback used');
+        }
+      }
+    } catch (e) { log('setInputValue Angular fallback error', e); }
   }
 
   /** Posa valor a un select triggejant change per Angular. */
@@ -147,7 +186,7 @@
     ov.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">🔄</span>
-        <strong style="font-size:14px">Auto Devolucions v2.0.5</strong>
+        <strong style="font-size:14px">Auto Devolucions v2.0.6</strong>
         <span id="fa-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px;background:#3b82f6;color:white;font-weight:600">Processant...</span>
       </div>
       <div id="fa-log" style="max-height:220px;overflow-y:auto;font-size:12px;color:#94a3b8"></div>
@@ -210,9 +249,10 @@
   async function waitLoading() {
     await sleep(300);
     const el = document.querySelector('.tsfz-loading-modal');
-    if (el && el.offsetParent !== null) {
+    if (el && isVisible(el)) {
       status('Esperant càrrega...', 'info');
-      await waitForElGone('.tsfz-loading-modal');
+      const gone = await waitForElGone('.tsfz-loading-modal');
+      if (!gone) status('La càrrega ("Cargando") no acaba — continuo igualment', 'warn');
     }
     await sleep(500);
   }
@@ -221,49 +261,52 @@
   //  ALLIANCE HEALTHCARE — AUTOMATITZACIÓ
   // ══════════════════════════════════════════════
 
-  async function allianceRun(products) {
+  async function allianceRun(products, options) {
     createOverlay();
     status(`Iniciant devolució de ${products.length} producte(s)...`);
 
     await dismissCookies();
 
     // ── 1. Navegar a la pàgina de sol·licitud ──
-    const hash = window.location.hash;
-    if (!hash || hash === '#/' || hash === '#') {
+    let hash = window.location.hash;
+    if (hash.includes('/requests/products')) {
+      status('Ja som a la pàgina de productes', 'ok');
+      await sleep(2000);
+    } else {
+      if (hash && hash !== '#/' && hash !== '#') {
+        status(`Hash inesperat (${hash}) — torno a l'inici de Devoluciones`, 'warn');
+        window.location.hash = '#/';
+        await sleep(3000);
+        await waitLoading();
+      }
       status('Navegant a "Solicitar devolución parcial"...', 'info');
 
       // Buscar el botó/link "Solicitar devolución parcial" — l'element MÉS INTERIOR
       const solBtn = await waitForEl(() => {
         const all = [...document.querySelectorAll('a, button, div.btn, span, li')]
-          .filter(el => el.offsetParent !== null &&
+          .filter(el => isVisible(el) &&
                         el.textContent.includes('Solicitar devolución parcial'));
         // el més interior (que no contingui cap altre candidat)
         const inner = all.find(el => !all.some(o => o !== el && el.contains(o)));
         return inner ? (inner.closest('a, button, [ng-click], [ui-sref]') || inner) : null;
       }, CONFIG.MAX_WAIT);
 
-      if (solBtn) {
-        solBtn.click();
-        // comprovar que realment hem canviat de pàgina
-        const ok = await waitForEl(() => location.hash.includes('/requests') ? document.body : null, 10000);
-        if (!ok) {
-          status('El clic a "Solicitar devolución parcial" no ha canviat de pàgina', 'error');
-          badge('Error', '#ef4444'); addCloseBtn(); return;
-        }
-        status('Pàgina de sol·licitud oberta', 'ok');
-        await sleep(CONFIG.PAGE_LOAD_DELAY);
-      } else {
+      if (!solBtn) {
         status('No s\'ha trobat "Solicitar devolución parcial"', 'error');
-        badge('Error', '#ef4444');
-        addCloseBtn();
-        return;
+        debugState('solicitar');
+        badge('Error', '#ef4444'); addCloseBtn(); return;
       }
-    } else if (hash.includes('/requests/products')) {
-      status('Ja som a la pàgina de productes', 'ok');
-      await sleep(2000);
-    } else {
-      // Estem en un altre hash — esperem una mica
-      await sleep(3000);
+      solBtn.click();
+      // comprovar que realment hem canviat de pàgina
+      const okNav = await waitForEl(
+        () => location.hash.includes('/requests/products') ? document.body : null, 15000);
+      if (!okNav) {
+        status('El clic a "Solicitar devolución parcial" no ha portat a #/requests/products', 'error');
+        debugState('navegació');
+        badge('Error', '#ef4444'); addCloseBtn(); return;
+      }
+      status('Pàgina de sol·licitud oberta', 'ok');
+      await sleep(CONFIG.PAGE_LOAD_DELAY);
     }
 
     await dismissCookies();
@@ -301,7 +344,7 @@
 
     // ── 3. Ajustar quantitats i motius per línia ──
     if (added.length > 0) {
-      const opts = data.options || {};
+      const opts = options || {};
       if (opts.skipQtyReason) {
         status('⏸ Revisa quantitat i motiu de cada línia manualment', 'wait');
       } else {
@@ -327,17 +370,74 @@
   // ── Trobar el primer input visible dins un modal ──
 
   function findModalInput() {
-    const modal = document.querySelector('.modal');
-    if (!modal || modal.offsetParent === null) return null;
-    // 1. Intentar #productCode
-    const byId = modal.querySelector('#productCode');
-    if (byId && byId.offsetParent !== null) return byId;
-    // 2. Primer input visible de tipus text/number/sense-tipus (el camp "Código")
-    const inputs = modal.querySelectorAll(
-      'input[type="text"], input[type="number"], input:not([type])'
-    );
-    for (const inp of inputs) {
-      if (inp.offsetParent !== null && !inp.disabled && !inp.readOnly) return inp;
+    // 1. #productCode (visible) — els modals són position:fixed, no usar offsetParent
+    const byId = document.querySelector('.modal #productCode') || document.querySelector('#productCode');
+    if (byId && isVisible(byId)) return byId;
+    // 2. Primer input de text d'un modal visible (camp "Código")
+    const modals = [...document.querySelectorAll('.modal')].filter(isVisible);
+    for (const modal of modals) {
+      const inputs = modal.querySelectorAll(
+        'input[type="text"], input[type="number"], input:not([type])'
+      );
+      for (const inp of inputs) {
+        if (isVisible(inp) && !inp.disabled && !inp.readOnly) return inp;
+      }
+    }
+    return null;
+  }
+
+  /** Troba el botó "Buscar por producto" (no exigeix que sigui visible). */
+  function findSearchButton() {
+    let b = document.querySelector('#search-buttons button[ng-click="searchByProduct()"]')
+      || document.querySelector('[ng-click="searchByProduct()"]');
+    if (b) return b;
+    const els = document.querySelectorAll('button, a, div.btn, span.btn, [role="button"]');
+    for (const el of els) {
+      if (el.textContent.trim() === 'Buscar por producto') return el;
+    }
+    for (const el of els) {
+      if (el.textContent.trim().includes('Buscar por producto')) return el;
+    }
+    return null;
+  }
+
+  /** Obre el modal de cerca per producte: clic real + fallback directe a Angular. */
+  async function openSearchModal(btn) {
+    // Intent 1: clic normal
+    btn.click();
+    log('Clicked "Buscar por producto"');
+    status('Clic a "Buscar por producto"', 'ok');
+    let inp = await waitForEl(findModalInput, 6000);
+    if (inp) return inp;
+
+    // Intent 2: seqüència de ratolí completa
+    status('El modal no s\'ha obert amb el clic — provo events de ratolí', 'warn');
+    try {
+      for (const t of ['mousedown', 'mouseup', 'click']) {
+        btn.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }));
+      }
+    } catch (e) { log('mouse events error', e); }
+    inp = await waitForEl(findModalInput, 4000);
+    if (inp) return inp;
+
+    // Intent 3: cridar searchByProduct() directament des d'Angular
+    const ng = getAngular();
+    if (ng) {
+      try {
+        const host = document.querySelector('#search-buttons') || btn;
+        let scope = ng.element(host).scope() || ng.element(btn).scope();
+        if (scope && typeof scope.searchByProduct === 'function') {
+          status('Crido searchByProduct() directament via Angular', 'warn');
+          if (scope.$root && !scope.$root.$$phase) scope.$apply(() => scope.searchByProduct());
+          else scope.searchByProduct();
+          inp = await waitForEl(findModalInput, 6000);
+          if (inp) return inp;
+        } else {
+          status('Angular: no he trobat searchByProduct() a l\'scope', 'warn');
+        }
+      } catch (e) {
+        status(`Angular fallback ha fallat: ${e.message}`, 'warn');
+      }
     }
     return null;
   }
@@ -351,7 +451,7 @@
 
     // Cas 2: estem al modal però en un altre pas → "Seleccionar otro producto"
     const prevBtn = document.querySelector('div.btn[ng-click="previousStep()"]');
-    if (prevBtn && prevBtn.offsetParent !== null) {
+    if (prevBtn && isVisible(prevBtn)) {
       prevBtn.click();
       log('Clicked "Seleccionar otro producto"');
       await sleep(CONFIG.ACTION_DELAY);
@@ -360,45 +460,47 @@
     }
 
     // Cas 3: modal tancat → clicar "Buscar por producto"
-    // 3a. Selector específic
-    let searchBtn = document.querySelector(
-      '#search-buttons button[ng-click="searchByProduct()"]'
-    );
-    // 3b. Fallback ampli: qualsevol element amb text exacte "Buscar por producto"
-    if (!searchBtn || searchBtn.offsetParent === null) {
-      searchBtn = await waitForEl(() => {
-        const els = document.querySelectorAll('button, a, div.btn, span.btn, [role="button"]');
-        for (const el of els) {
-          if (el.offsetParent !== null &&
-              el.textContent.trim() === 'Buscar por producto') return el;
-        }
-        // Coincidència parcial com a últim recurs
-        for (const el of els) {
-          if (el.offsetParent !== null &&
-              el.textContent.trim().includes('Buscar por producto')) return el;
-        }
+    // 3a. Ens assegurem que som a la pàgina de productes i que no hi ha "Cargando"
+    if (!location.hash.includes('/requests/products')) {
+      status(`Hash inesperat (${location.hash || 'buit'}) — espero #/requests/products`, 'warn');
+      const okHash = await waitForEl(
+        () => location.hash.includes('/requests/products') ? document.body : null, 15000);
+      if (!okHash) {
+        status('No som a la pàgina "Buscar productos" (#/requests/products)', 'error');
+        debugState('hash');
         return null;
-      }, CONFIG.MAX_WAIT);
+      }
     }
+    await waitLoading();
 
+    // 3b. Esperar que el botó existeixi al DOM (sense exigir visibilitat)
+    const searchBtn = await waitForEl(findSearchButton, CONFIG.MAX_WAIT);
     if (!searchBtn) {
       log('Cannot find "Buscar por producto" button');
       status('No s\'ha trobat el botó "Buscar por producto"', 'error');
+      debugState('botó');
       return null;
     }
+    // Si hi ha un overlay de càrrega, esperar-lo; i que el botó no estigui desactivat
+    await waitLoading();
+    let tries = 0;
+    while ((searchBtn.disabled || searchBtn.classList.contains('disabled')) && tries < 20) {
+      await sleep(300); tries++;
+    }
+    if (!isVisible(searchBtn)) {
+      status('El botó "Buscar por producto" existeix però no és visible — continuo igualment', 'warn');
+    }
 
-    searchBtn.click();
-    log('Clicked "Buscar por producto"');
-    status('Clic a "Buscar por producto"', 'ok');
-    await sleep(CONFIG.ACTION_DELAY);
-
-    // Esperar que aparegui el modal amb l'input
-    cnInput = await waitForEl(findModalInput, CONFIG.MAX_WAIT);
+    cnInput = await openSearchModal(searchBtn);
     if (!cnInput) {
       log('Modal opened but no input found');
-      status('El modal s\'ha obert però no s\'ha trobat cap camp de cerca', 'error');
+      status('El modal no s\'ha obert o no té camp de cerca (#productCode)', 'error');
+      debugState('modal');
+      return null;
     }
-    return cnInput;
+    // Esperar que "Cargando" desaparegui abans de teclejar
+    await waitLoading();
+    return findModalInput() || cnInput;
   }
 
     // ── Afegir un producte (cerca → selecció → albarà → afegir) ──
@@ -424,7 +526,8 @@
     await sleep(300);
 
     // ── Pas B: Clicar "Buscar" (dins el modal) ──
-    const buscarBtn = document.querySelector('.modal input[type="submit"][value="Buscar"]')
+    const buscarBtn = [...document.querySelectorAll('.modal input[type="submit"][value="Buscar"]')].find(isVisible)
+      || document.querySelector('.modal input[type="submit"][value="Buscar"]')
       || document.querySelector('.modal button[type="submit"]')
       || (() => {
         const els = document.querySelectorAll('.modal button, .modal input[type="submit"], .modal .btn');
@@ -452,9 +555,11 @@
     await waitLoading();
 
     // ── Pas C: Comprovar resultats ──
-    const modal = document.querySelector('.tsfz-lg-modal, .modal');
+    const modal = [...document.querySelectorAll('.tsfz-lg-modal, .modal')].find(isVisible)
+      || document.querySelector('.tsfz-lg-modal, .modal');
     if (modal) {
-      const modalText = modal.textContent.toLowerCase();
+      // innerText només inclou el text visible (ng-show/ng-hide no donen falsos "sense resultats")
+      const modalText = (modal.innerText || modal.textContent).toLowerCase();
       // Comprovar diversos textos possibles de "sense resultats"
       const noResultPatterns = [
         'no existen resultados',
@@ -553,7 +658,7 @@
           const stillOnAlbara = document.querySelector(
             'tbody.table-data tr[ng-repeat="returnLine in returnLines"]'
           );
-          if (!stillOnAlbara || stillOnAlbara.offsetParent === null) {
+          if (!stillOnAlbara || !isVisible(stillOnAlbara)) {
             resolve();
             return;
           }
@@ -716,7 +821,7 @@
         const extraInput = matchedRow.querySelector(
           'input[ng-model="line.receivedArticle.articleCode"]'
         );
-        if (extraInput && extraInput.offsetParent !== null) {
+        if (extraInput && isVisible(extraInput)) {
           status(`CN ${product.cn}: ⚠ Motiu "Servido por error" requereix codi article rebut — revisa manualment`, 'warn');
         }
       }
@@ -752,10 +857,13 @@
       opt => opt.value && opt.text.trim()
     );
 
+    // Angular pot posar values com "string:01" o "1: 01"
+    const optCode = (opt) => String(opt.value).replace(/^(string:|\d+:\s*)/, '').trim();
+
     // 0. Si ens passen un codi directe ('01', '02'...), buscar per value
     if (/^\d{2}$/.test(norm)) {
       for (const opt of validOpts) {
-        if (opt.value === norm) {
+        if (opt.value === norm || optCode(opt) === norm) {
           setSelectValue(select, opt.value);
           return true;
         }
@@ -766,7 +874,7 @@
     const code = TEXT_TO_CODE[norm];
     if (code) {
       for (const opt of validOpts) {
-        if (opt.value === code) {
+        if (opt.value === code || optCode(opt) === code) {
           setSelectValue(select, opt.value);
           return true;
         }
@@ -843,6 +951,15 @@
         return;
       }
 
+      // Dedupe: el mateix event arriba per document I per window (i potser a 2 còpies de l'script)
+      const nowTs = Date.now();
+      const lastTs = parseInt(document.documentElement.getAttribute('data-farmacia-return-ts') || '0', 10);
+      if (nowTs - lastTs < 5000) {
+        log('Duplicate farmacia-start-return event ignored');
+        return;
+      }
+      document.documentElement.setAttribute('data-farmacia-return-ts', String(nowTs));
+
       log(`Return request: ${detail.products.length} products → ${detail.wholesaler}`);
 
       // Marcar que hem gestionat l'event — DOM attribute (robust) + unsafeWindow (fallback)
@@ -874,6 +991,63 @@
   //  PÀGINA ALLIANCE HEALTHCARE
   // ══════════════════════════════════════════════
 
+  // ── Bloqueig d'execució única ──
+  const INSTANCE_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const LOCK_KEY = 'run_lock';
+  const LOCK_STALE_MS = 15000;
+  let lockTimer = null;
+  let lockOwned = false;
+
+  function readLock() {
+    try { const raw = GM_getValue(LOCK_KEY, null); return raw ? JSON.parse(raw) : null; }
+    catch (e) { return null; }
+  }
+  function writeLock() {
+    GM_setValue(LOCK_KEY, JSON.stringify({ id: INSTANCE_ID, ts: Date.now() }));
+  }
+
+  async function acquireRunLock() {
+    const de = document.documentElement;
+    // 1. Marca al DOM (compartida per totes les còpies de l'script a aquesta pàgina)
+    if (de.getAttribute('data-fa-autodevo')) return false;
+    de.setAttribute('data-fa-autodevo', INSTANCE_ID);
+    // 2. Flag a window
+    try {
+      if (unsafeWindow.__FA_RUNNING__) { de.removeAttribute('data-fa-autodevo'); return false; }
+      unsafeWindow.__FA_RUNNING__ = INSTANCE_ID;
+    } catch (e) {}
+    // 3. Bloqueig GM entre pestanyes (amb timestamp: caduca si l'altra pestanya ha mort)
+    const cur = readLock();
+    if (cur && cur.id !== INSTANCE_ID && Date.now() - cur.ts < LOCK_STALE_MS) {
+      de.removeAttribute('data-fa-autodevo');
+      try { unsafeWindow.__FA_RUNNING__ = null; } catch (e) {}
+      return false;
+    }
+    writeLock();
+    await sleep(400 + Math.floor(Math.random() * 300)); // resoldre curses (GM no és atòmic)
+    const after = readLock();
+    if (!after || after.id !== INSTANCE_ID) {
+      de.removeAttribute('data-fa-autodevo');
+      try { unsafeWindow.__FA_RUNNING__ = null; } catch (e) {}
+      return false;
+    }
+    lockOwned = true;
+    lockTimer = setInterval(writeLock, 3000);
+    window.addEventListener('pagehide', releaseRunLock);
+    return true;
+  }
+
+  function releaseRunLock() {
+    if (lockTimer) { clearInterval(lockTimer); lockTimer = null; }
+    if (!lockOwned) return;
+    lockOwned = false;
+    try {
+      const cur = readLock();
+      if (cur && cur.id === INSTANCE_ID) GM_deleteValue(LOCK_KEY);
+    } catch (e) {}
+    try { document.documentElement.removeAttribute('data-fa-autodevo'); unsafeWindow.__FA_RUNNING__ = null; } catch (e) {}
+  }
+
   function initAlliancePage() {
     const data = getPending();
     if (!data || data.wholesaler !== 'alliance') {
@@ -892,20 +1066,33 @@
       // Estem a una altra pàgina Alliance (home, login redirect, etc.)
       // Navegar a devolucions automàticament
       log(`Not on /devoluciones (path: ${path}) — redirecting...`);
+      let redirs = 0;
+      try { redirs = parseInt(sessionStorage.getItem('fa_redirs') || '0', 10); sessionStorage.setItem('fa_redirs', String(redirs + 1)); } catch (e) {}
+      if (redirs >= 3) { log('Too many redirects to /devoluciones — giving up'); return; }
       window.location.href = 'https://my.alliance-healthcare.es/group/pro/devoluciones';
       return;
     }
 
     // Iniciar automatització amb un delay per deixar carregar la SPA
     (async () => {
-      await sleep(3000);
+      // Bloqueig d'execució única (aquesta pàgina, altres pestanyes, còpies duplicades de l'script)
+      const gotLock = await acquireRunLock();
+      if (!gotLock) {
+        log('Another instance is already running — this one stays idle');
+        return;
+      }
       try {
-        await allianceRun(data.products);
+        await sleep(3000);
+        await allianceRun(data.products, data.options || {});
       } catch (e) {
         log('Error during allianceRun:', e);
         status(`Error inesperat: ${e.message}`, 'error');
         badge('Error', '#ef4444');
         addCloseBtn();
+      } finally {
+        // La feina (o l'error) ja s'ha mostrat: no reintentar sol a cada pàgina d'Alliance
+        clearPending();
+        releaseRunLock();
       }
     })();
   }
