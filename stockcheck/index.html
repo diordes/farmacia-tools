@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StockCheck — Farmàcia</title>
+<meta name="description" content="Eina de recompte d'stock per a farmàcies amb escàner de codis de barres">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+/* ── Layout: mobile-first bottom-tab pharmacy tool ── */
+:root {
+  --bg: #F6F8FA;
+  --bg-card: #FFFFFF;
+  --bg-input: #EEF1F5;
+  --fg: #1B2636;
+  --fg-mid: #556275;
+  --fg-muted: #8E9AAC;
+  --accent: #0D9373;
+  --accent-hover: #0B7E63;
+  --accent-bg: #E6F6F1;
+  --red: #D13438;
+  --red-bg: #FDE7E8;
+  --green: #1B8A4A;
+  --green-bg: #E3F5EB;
+  --amber: #D48806;
+  --amber-bg: #FEF3D4;
+  --border: #DDE2E9;
+  --shadow-sm: 0 1px 2px rgba(27,38,54,.06);
+  --shadow: 0 2px 8px rgba(27,38,54,.08);
+  --r: 12px;
+  --r-sm: 8px;
+  --tab-h: 60px;
+  --hdr-h: 56px;
+  --font-d: 'Space Grotesk', system-ui, sans-serif;
+  --font-b: 'Inter', system-ui, sans-serif;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111820;--bg-card:#1A222D;--bg-input:#232D3A;--fg:#E0E6ED;--fg-mid:#9BA8B9;--fg-muted:#6B798A;
+  --accent:#30C498;--accent-hover:#28A880;--accent-bg:rgba(48,196,152,.12);
+  --red:#F97583;--red-bg:rgba(249,117,131,.12);--green:#56D364;--green-bg:rgba(86,211,100,.12);
+  --amber:#E3B341;--amber-bg:rgba(227,179,65,.12);--border:#2A3444;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.2);--shadow:0 2px 8px rgba(0,0,0,.25);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#111820;--bg-card:#1A222D;--bg-input:#232D3A;--fg:#E0E6ED;--fg-mid:#9BA8B9;--fg-muted:#6B798A;
+  --accent:#30C498;--accent-hover:#28A880;--accent-bg:rgba(48,196,152,.12);
+  --red:#F97583;--red-bg:rgba(249,117,131,.12);--green:#56D364;--green-bg:rgba(86,211,100,.12);
+  --amber:#E3B341;--amber-bg:rgba(227,179,65,.12);--border:#2A3444;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.2);--shadow:0 2px 8px rgba(0,0,0,.25);
+  color-scheme:dark;
+}
+
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-b);
+  padding-left: max(16px, env(safe-area-inset-left,0px));
+  padding-right: max(16px, env(safe-area-inset-right,0px));
+  padding-block: 0;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100%;
+}
+* { box-sizing: border-box; margin: 0; }
+h1,h2,h3 { font-family: var(--font-d); text-wrap: balance; }
+input, select, button { font: inherit; }
+button { cursor: pointer; border: none; }
+
+/* Header */
+.hdr {
+  position: sticky; top: env(safe-area-inset-top,0px); z-index: 20;
+  display: flex; align-items: center; gap: 10px;
+  height: var(--hdr-h); background: var(--bg); border-bottom: 1px solid var(--border);
+}
+body::before {
+  content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top,0px);
+  z-index:30; background:var(--bg);
+}
+.hdr h1 { font-size: 1.15rem; font-weight: 700; color: var(--accent); flex: 1; }
+.hdr .badge {
+  font-size: .75rem; font-weight: 600; padding: 3px 8px; border-radius: 20px;
+  background: var(--accent-bg); color: var(--accent);
+}
+.hdr-gear {
+  background: none; border: none; color: var(--fg-muted); padding: 6px;
+  border-radius: var(--r-sm); cursor: pointer; display: flex; align-items: center;
+  transition: color .15s;
+}
+.hdr-gear:active { color: var(--accent); }
+
+/* Settings panel */
+.settings-overlay {
+  position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.4);
+  animation: fadeIn .15s;
+}
+.settings-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(340px, 85vw);
+  background: var(--bg); box-shadow: -4px 0 20px rgba(0,0,0,.15);
+  display: flex; flex-direction: column;
+  animation: slideIn .2s ease-out;
+}
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Adjust modal */
+.adjust-modal-overlay {
+  position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.5);
+  align-items: center; justify-content: center;
+  padding: 16px; animation: fadeIn .15s;
+  display: none;
+}
+.adjust-modal-overlay:not([hidden]) {
+  display: flex;
+}
+.adjust-modal {
+  background: var(--bg-card); border-radius: var(--r); padding: 20px;
+  width: min(380px, 100%); box-shadow: 0 8px 32px rgba(0,0,0,.2);
+}
+.adjust-warning {
+  display: flex; gap: 8px; align-items: flex-start;
+  background: var(--amber-bg); border: 1px solid var(--amber);
+  border-radius: var(--r-sm); padding: 10px 12px;
+  font-size: .8rem; color: var(--fg); margin-bottom: 12px; line-height: 1.4;
+}
+.adjust-btn-apply {
+  background: var(--accent); color: #fff; font-weight: 600;
+  padding: 10px 0; border-radius: var(--r-sm); font-size: .9rem;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.settings-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px; border-bottom: 1px solid var(--border);
+}
+.settings-hdr h2 { font-size: 1rem; font-weight: 700; margin: 0; }
+.settings-close {
+  background: none; border: none; font-size: 1.5rem; color: var(--fg-muted);
+  cursor: pointer; padding: 4px 8px; line-height: 1;
+}
+.settings-body {
+  flex: 1; overflow-y: auto; padding: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+.settings-section { margin-bottom: 24px; }
+.settings-section-title {
+  font-size: .78rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--fg-muted); margin-bottom: 10px;
+}
+
+/* Tab bar */
+.tabs {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  display: flex; background: var(--bg-card); border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-shadow: 0 -1px 4px rgba(0,0,0,.06);
+}
+.tab-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 4px 6px; background: none; color: var(--fg-muted); font-size: .65rem;
+  font-weight: 600; letter-spacing: .02em; text-transform: uppercase; transition: color .15s;
+}
+.tab-btn.active { color: var(--accent); }
+.tab-btn svg { width: 22px; height: 22px; }
+
+/* Views */
+.view { display: none; padding-bottom: calc(var(--tab-h) + 20px + env(safe-area-inset-bottom,0px)); padding-top: 12px; }
+.view.active { display: block; }
+
+/* Cards */
+.card {
+  background: var(--bg-card); border-radius: var(--r); border: 1px solid var(--border);
+  padding: 16px; box-shadow: var(--shadow-sm);
+}
+.card + .card { margin-top: 12px; }
+.card-title { font-family: var(--font-d); font-size: .85rem; font-weight: 600; color: var(--fg-mid); margin-bottom: 10px; }
+
+/* Form elements */
+.input-row { display: flex; gap: 8px; align-items: stretch; }
+.input-field {
+  flex: 1; padding: 12px 14px; background: var(--bg-input); border: 2px solid transparent;
+  border-radius: var(--r-sm); font-size: 1rem; color: var(--fg); transition: border-color .15s;
+  min-width: 0;
+}
+.input-field:focus { outline: none; border-color: var(--accent); background: var(--bg-card); }
+.input-field::placeholder { color: var(--fg-muted); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 12px 20px; border-radius: var(--r-sm); font-weight: 600; font-size: .9rem;
+  transition: background .15s, opacity .15s;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:active { opacity: .85; }
+.btn-secondary { background: var(--bg-input); color: var(--fg); }
+.btn-secondary:hover { background: var(--border); }
+.btn-outline { background:none; border:2px solid var(--border); color:var(--fg); }
+.btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+.btn-sm { padding: 8px 14px; font-size: .8rem; }
+.btn-icon { padding: 12px; }
+.btn:disabled { opacity: .45; pointer-events: none; }
+
+/* Zone selector */
+.zone-bar {
+  display: flex; gap: 6px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;
+}
+.zone-chip {
+  padding: 6px 14px; border-radius: 20px; font-size: .8rem; font-weight: 600;
+  background: var(--bg-input); color: var(--fg-mid); border: 2px solid transparent;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.zone-chip.active { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
+.zone-chip.add { background: none; border: 2px dashed var(--border); color: var(--fg-muted); }
+
+/* Product card after scan */
+.product-result {
+  margin-top: 14px; padding: 18px; border-radius: var(--r);
+  border: 2px solid var(--accent); background: var(--bg-card);
+}
+.product-result.not-found { border-color: var(--red); }
+.product-name { font-family: var(--font-d); font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
+.product-cn { font-size: .8rem; color: var(--fg-muted); margin-bottom: 14px; }
+.stock-row {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+}
+.stock-label { font-size: .75rem; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .03em; font-weight: 600; }
+.stock-value { font-family: var(--font-d); font-size: 1.6rem; font-weight: 700; }
+.count-input-wrap {
+  display: flex; align-items: center; gap: 8px;
+}
+.count-input {
+  width: 80px; text-align: center; font-family: var(--font-d); font-size: 1.5rem;
+  font-weight: 700; padding: 10px; background: var(--bg-input); border: 2px solid transparent;
+  border-radius: var(--r-sm); color: var(--fg);
+}
+.count-input:focus { outline: none; border-color: var(--accent); background: var(--bg-card); }
+.adj-btn {
+  width: 44px; height: 44px; border-radius: 50%; font-size: 1.2rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-input); color: var(--fg); transition: all .12s;
+}
+.adj-btn:active { background: var(--accent); color: #fff; }
+
+.diff-badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+  border-radius: 20px; font-size: .85rem; font-weight: 700; font-family: var(--font-d);
+  font-variant-numeric: tabular-nums;
+}
+.diff-badge.ok { background: var(--green-bg); color: var(--green); }
+.diff-badge.deficit { background: var(--red-bg); color: var(--red); }
+.diff-badge.surplus { background: var(--amber-bg); color: var(--amber); }
+
+/* Recent counts */
+.recent-list { margin-top: 16px; }
+.recent-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 0;
+  border-bottom: 1px solid var(--border); font-size: .85rem;
+}
+.recent-item:last-child { border-bottom: none; }
+.recent-item .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.recent-item .cn { color: var(--fg-muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.recent-item .arrow { color: var(--fg-muted); font-size: .75rem; }
+.recent-item .counted-badge {
+  background: var(--primary); color: #fff; border-radius: 10px;
+  padding: 1px 8px; font-size: .75rem; font-weight: 700; min-width: 22px;
+  text-align: center;
+}
+.recent-item:active { background: var(--bg-input); }
+
+/* Camera overlay */
+.camera-overlay {
+  position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.92);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.camera-overlay[hidden] { display: none !important; }
+.camera-close {
+  position: absolute; top: max(16px, env(safe-area-inset-top,0px)); right: 16px;
+  width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.15);
+  color: #fff; font-size: 1.4rem; display: flex; align-items: center; justify-content: center;
+  z-index: 51;
+}
+#reader { width: 100%; max-width: 400px; border-radius: var(--r); overflow: hidden; }
+
+/* Stats cards */
+.stats-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: var(--bg-card); border-radius: var(--r-sm); border: 1px solid var(--border);
+  padding: 12px; text-align: center;
+}
+.stat-value {
+  font-family: var(--font-d); font-size: 1.5rem; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stat-label { font-size: .7rem; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; margin-top: 2px; }
+
+/* Diff table */
+.diff-table-wrap { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+.diff-table {
+  width: 100%; border-collapse: collapse; font-size: .82rem;
+  font-variant-numeric: tabular-nums;
+}
+.diff-table th {
+  text-align: left; padding: 8px 10px; font-size: .7rem; color: var(--fg-muted);
+  text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
+  border-bottom: 2px solid var(--border); white-space: nowrap;
+}
+.diff-table td {
+  padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle;
+}
+.diff-table .num { text-align: right; }
+.diff-table .product-cell { min-width: 120px; }
+.diff-table .product-cell .pname { font-weight: 500; }
+.diff-table .product-cell .pcn { font-size: .72rem; color: var(--fg-muted); }
+.diff-table tr.has-diff { background: var(--red-bg); }
+.diff-table tr.has-surplus { background: var(--amber-bg); }
+
+/* Filter bar */
+.filter-bar {
+  display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;
+}
+.filter-chip {
+  padding: 5px 12px; border-radius: 20px; font-size: .75rem; font-weight: 600;
+  background: var(--bg-input); color: var(--fg-mid); border: none; cursor: pointer;
+}
+.filter-chip.active { background: var(--accent-bg); color: var(--accent); }
+
+/* Import section */
+.import-area {
+  border: 2px dashed var(--border); border-radius: var(--r); padding: 32px 16px;
+  text-align: center; cursor: pointer; transition: border-color .15s;
+}
+.import-area:hover { border-color: var(--accent); }
+.import-area svg { width: 40px; height: 40px; color: var(--fg-muted); margin-bottom: 8px; }
+.import-area p { font-size: .85rem; color: var(--fg-muted); }
+.import-area .cta { color: var(--accent); font-weight: 600; }
+input[type="file"] { display: none; }
+
+/* Column mapping */
+.mapping-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.mapping-row:last-child { border-bottom: none; }
+.mapping-label { width: 90px; font-size: .8rem; font-weight: 600; color: var(--fg-mid); flex-shrink: 0; }
+.mapping-select {
+  flex: 1; padding: 8px 10px; background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--r-sm); font-size: .85rem; color: var(--fg); min-width: 0;
+}
+
+/* Catalog info */
+.info-row {
+  display: flex; justify-content: space-between; padding: 8px 0; font-size: .85rem;
+  border-bottom: 1px solid var(--border);
+}
+.info-row:last-child { border-bottom: none; }
+.info-row .label { color: var(--fg-muted); }
+.info-row .value { font-weight: 600; }
+
+/* Section title */
+.section-title {
+  font-family: var(--font-d); font-size: .9rem; font-weight: 700;
+  margin: 20px 0 10px; display: flex; align-items: center; gap: 8px;
+}
+
+/* Empty state */
+.empty-state { text-align: center; padding: 40px 16px; color: var(--fg-muted); }
+.empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: .5; }
+.empty-state p { font-size: .9rem; line-height: 1.5; }
+.empty-state .action { margin-top: 16px; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: calc(var(--tab-h) + 16px + env(safe-area-inset-bottom,0px));
+  left: 50%; transform: translateX(-50%); z-index: 40;
+  padding: 10px 20px; border-radius: 30px; font-size: .85rem; font-weight: 600;
+  box-shadow: var(--shadow); opacity: 0; transition: opacity .3s; pointer-events: none;
+}
+.toast.show { opacity: 1; }
+.toast.success { background: var(--green); color: #fff; }
+.toast.error { background: var(--red); color: #fff; }
+
+/* Confirm btn full width */
+.btn-confirm {
+  width: 100%; padding: 14px; font-size: 1rem; margin-top: 12px;
+}
+
+/* Animations */
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+.fade-in { animation: fadeIn .25s ease-out; }
+
+/* Delete btn on recent items */
+.recent-del {
+  width: 32px; height: 32px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; background: none; color: var(--fg-muted);
+  font-size: .9rem; flex-shrink: 0;
+}
+.recent-del:hover { background: var(--red-bg); color: var(--red); }
+</style>
+</head>
+<body>
+
+<!-- ── APP ── -->
+<div id="app">
+  <header class="hdr">
+    <h1>StockCheck</h1>
+    <span class="badge" id="hdr-count">0 comptats</span>
+    <button class="hdr-gear" onclick="toggleSettings()" aria-label="Configuració">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- SETTINGS PANEL (overlay) -->
+  <div class="settings-overlay" id="settings-overlay" hidden onclick="if(event.target===this)toggleSettings()">
+    <div class="settings-panel">
+      <div class="settings-hdr">
+        <h2>Configuració</h2>
+        <button class="settings-close" onclick="toggleSettings()">&times;</button>
+      </div>
+      <div class="settings-body" id="settings-body"></div>
+    </div>
+  </div>
+
+  <!-- SCAN VIEW -->
+  <section class="view active" id="v-scan">
+    <div class="zone-bar" id="zone-bar"></div>
+
+    <div class="card">
+      <div class="input-row">
+        <input class="input-field" id="cn-input" type="text" inputmode="numeric" pattern="[0-9]*"
+               placeholder="Escaneja o escriu el CN..." autocomplete="off">
+        <button class="btn btn-icon btn-primary" onclick="openCamera()" title="Obrir càmera"
+                aria-label="Obrir càmera per escanejar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="product-area"></div>
+    <div id="recent-area"></div>
+  </section>
+
+  <!-- RESULTS VIEW -->
+  <section class="view" id="v-results">
+    <div class="stats-row" id="stats-area"></div>
+    <div class="filter-bar" id="filter-bar"></div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="diff-table-wrap" id="diff-table-area"></div>
+    </div>
+    <div id="adjust-area"></div>
+  </section>
+
+  <!-- Adjust password modal -->
+  <div class="adjust-modal-overlay" id="adjust-modal" hidden onclick="if(event.target===this)closeAdjustModal()">
+    <div class="adjust-modal">
+      <div style="font-weight:600;font-size:1rem;margin-bottom:12px">Aplicar correccions a Farmatic</div>
+      <div class="adjust-warning">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="flex-shrink:0;color:var(--amber)">
+          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span>Això modificarà directament el stock a la base de dades de Farmatic. Farmatic no registrarà moviment d'ajust.</span>
+      </div>
+      <div id="adjust-summary" style="font-size:.85rem;color:var(--fg-mid);margin-bottom:12px"></div>
+      <input class="input-field" id="adjust-pwd" type="password" placeholder="Contrasenya" autocomplete="off" style="margin-bottom:12px">
+      <div id="adjust-progress" hidden style="margin-bottom:12px">
+        <div style="background:var(--bg-input);border-radius:6px;height:6px;overflow:hidden">
+          <div id="adjust-bar" style="background:var(--accent);height:100%;width:0%;transition:width .3s"></div>
+        </div>
+        <div id="adjust-status" style="font-size:.78rem;color:var(--fg-muted);margin-top:4px;text-align:center"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" style="flex:1" onclick="closeAdjustModal()">Cancel·lar</button>
+        <button class="btn btn-primary" style="flex:1;background:var(--red)" id="btn-apply-adjust" onclick="applyAdjustments()">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden file input for CSV import -->
+  <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.tsv" hidden>
+  <div class="card" id="mapping-card" hidden style="position:fixed;bottom:60px;left:16px;right:16px;z-index:45">
+    <div class="card-title">Mapeig de columnes</div>
+    <div id="mapping-area"></div>
+    <button class="btn btn-primary btn-confirm" onclick="applyMapping()">Importar catàleg</button>
+  </div>
+
+  <!-- TAB BAR -->
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="scan" onclick="switchTab('scan')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/>
+        <line x1="7" y1="12" x2="17" y2="12"/>
+      </svg>
+      Escaneig
+    </button>
+    <button class="tab-btn" data-tab="results" onclick="switchTab('results')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+        <line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+      Resultats
+    </button>
+  </nav>
+
+  <!-- Camera overlay -->
+  <div class="camera-overlay" id="camera-overlay" hidden>
+    <button class="camera-close" onclick="closeCamera()" aria-label="Tancar càmera">&times;</button>
+    <div id="reader"></div>
+    <p style="color:#fff;font-size:.85rem;margin-top:16px;text-align:center;opacity:.8">Apunta al codi de barres del medicament</p>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ═══════════ STATE ═══════════ */
+let catalog = {};      // cn → { cn, name, stock, ean }
+let counts  = {};      // cn → { cn, name, counted, zone, ts }
+let zones   = ['General'];
+let curZone = 'General';
+let curProduct = null;    // { cn, name, stock }
+let activeTab  = 'scan';
+let filter = 'all';      // 'all'|'diff'|'deficit'|'surplus'|'ok'
+let importRows = null;
+let importHeaders = null;
+let mapping = { cn:-1, name:-1, stock:-1, ean:-1 };
+let scanner = null;
+
+/* ═══════════ API MODE ═══════════ */
+let apiMode = false;       // true when local server detected
+let apiBase = '';           // e.g. 'http://localhost:5555'
+let apiStats = null;       // { total_articles, amb_stock }
+
+/* ═══════════ STORAGE ═══════════ */
+function save(){
+  try {
+    localStorage.setItem('sc_catalog', JSON.stringify(catalog));
+    localStorage.setItem('sc_counts',  JSON.stringify(counts));
+    localStorage.setItem('sc_zones',   JSON.stringify(zones));
+    localStorage.setItem('sc_zone',    curZone);
+  } catch(e){}
+}
+function load(){
+  try {
+    const c = localStorage.getItem('sc_catalog');
+    const n = localStorage.getItem('sc_counts');
+    const z = localStorage.getItem('sc_zones');
+    const zn = localStorage.getItem('sc_zone');
+    if(c) catalog = JSON.parse(c);
+    if(n) counts  = JSON.parse(n);
+    if(z) zones   = JSON.parse(z);
+    if(zn) curZone = zn;
+    if(!zones.length) zones = ['General'];
+    if(!zones.includes(curZone)) curZone = zones[0];
+  } catch(e){}
+}
+
+/* ═══════════ API ═══════════ */
+async function detectAPI(){
+  // Try current origin first (when served by Flask), then localhost:5555
+  const candidates = [window.location.origin, 'http://localhost:5555'];
+  const urls = [...new Set(candidates)];
+  for(const base of urls){
+    try {
+      const r = await fetch(base + '/api/ping', { signal: AbortSignal.timeout(2000) });
+      if(!r.ok) continue;
+      const data = await r.json();
+      if(data.ok && data.mode === 'sql'){
+        apiBase = base;
+        apiMode = true;
+        try {
+          const sr = await fetch(apiBase + '/api/stats');
+          if(sr.ok) apiStats = await sr.json();
+        } catch(e){}
+        return true;
+      }
+    } catch(e){ /* timeout or network error — try next */ }
+  }
+  apiMode = false;
+  return false;
+}
+
+async function apiLookup(code){
+  try {
+    const r = await fetch(apiBase + '/api/lookup/' + encodeURIComponent(code), { signal: AbortSignal.timeout(3000) });
+    if(!r.ok) return null;
+    const data = await r.json();
+    if(!data.found) return null;
+    const prod = { cn: data.cn, name: data.name, stock: data.stock, ean: '' };
+    catalog[data.cn] = prod;
+    return prod;
+  } catch(e){ return null; }
+}
+
+async function apiSearch(query){
+  try {
+    const r = await fetch(apiBase + '/api/search?q=' + encodeURIComponent(query) + '&stock=0', { signal: AbortSignal.timeout(3000) });
+    if(!r.ok) return [];
+    return await r.json();
+  } catch(e){ return []; }
+}
+
+/* ═══════════ AUDIO ═══════════ */
+let audioCtx;
+function getAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
+function beep(freq, dur){
+  try {
+    const ctx = getAudio(); const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value=freq; o.type='sine';
+    g.gain.setValueAtTime(0.15, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+dur);
+    o.start(ctx.currentTime); o.stop(ctx.currentTime+dur);
+  } catch(e){}
+}
+function beepOk(){ beep(880, 0.12); beep(1100, 0.1); }
+function beepDiff(){ beep(440, 0.2); }
+function beepErr(){ beep(220, 0.3); }
+function vibrate(ms){ try{ navigator.vibrate(ms); } catch(e){} }
+
+/* ═══════════ CATALOG IMPORT ═══════════ */
+const CN_KW   = ['cn','codigo nacional','codi nacional','código nacional','codigo','codi','cod_nacional','codnat'];
+const NAME_KW = ['nombre','nom','descripcion','descripció','producto','producte','articulo','article','denominacion','denominació'];
+const STK_KW  = ['stock','existencias','existències','unidades','unitats','cantidad','quantitat','uds','existencia'];
+const EAN_KW  = ['ean','codigo de barras','codi de barres','barcode','codbar','cod_barras','ean13'];
+
+function scoreMatch(header, keywords){
+  const h = (header||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  let best = 0;
+  for(const kw of keywords){
+    const k = kw.normalize('NFD').replace(/[̀-ͯ]/g,'');
+    if(h === k) return 100;
+    if(h.includes(k)) best = Math.max(best, 60 + k.length);
+    if(k.includes(h) && h.length > 2) best = Math.max(best, 40);
+  }
+  return best;
+}
+function detectColumns(headers){
+  const result = { cn:-1, name:-1, stock:-1, ean:-1 };
+  const used = new Set();
+  const fields = [
+    { key:'cn',   kw:CN_KW },
+    { key:'name', kw:NAME_KW },
+    { key:'stock',kw:STK_KW },
+    { key:'ean',  kw:EAN_KW }
+  ];
+  for(const f of fields){
+    let bestIdx=-1, bestScore=0;
+    headers.forEach((h,i) => {
+      if(used.has(i)) return;
+      const s = scoreMatch(h, f.kw);
+      if(s > bestScore){ bestScore=s; bestIdx=i; }
+    });
+    if(bestIdx >= 0 && bestScore >= 30){
+      result[f.key] = bestIdx;
+      used.add(bestIdx);
+    }
+  }
+  return result;
+}
+
+function handleFile(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+      if(rows.length < 2){ toast('El fitxer és buit','error'); return; }
+      importRows = rows;
+      importHeaders = rows[0].map(h => String(h).trim());
+      mapping = detectColumns(importHeaders);
+      showMapping();
+    } catch(err){
+      toast('Error llegint el fitxer','error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showMapping(){
+  const card = document.getElementById('mapping-card');
+  const area = document.getElementById('mapping-area');
+  card.hidden = false;
+  const fields = [
+    { key:'cn',   label:'CN',   required:true },
+    { key:'name', label:'Nom',  required:true },
+    { key:'stock',label:'Stock',required:true },
+    { key:'ean',  label:'EAN',  required:false }
+  ];
+  let html = '';
+  for(const f of fields){
+    html += `<div class="mapping-row">
+      <span class="mapping-label">${f.label}${f.required?' *':''}</span>
+      <select class="mapping-select" data-field="${f.key}" onchange="updateMapping(this)">
+        <option value="-1">${f.required?'— Selecciona —':'(no disponible)'}</option>
+        ${importHeaders.map((h,i) => `<option value="${i}" ${mapping[f.key]===i?'selected':''}>${h}</option>`).join('')}
+      </select>
+    </div>`;
+  }
+  if(importRows.length > 1){
+    html += `<p style="font-size:.75rem;color:var(--fg-muted);margin-top:10px">Vista prèvia: ${importRows.length-1} files detectades. Primera fila:</p>`;
+    html += `<p style="font-size:.78rem;margin-top:4px;word-break:break-all">`;
+    const row = importRows[1];
+    const parts = [];
+    if(mapping.cn>=0) parts.push(`<strong>CN:</strong> ${row[mapping.cn]}`);
+    if(mapping.name>=0) parts.push(`<strong>Nom:</strong> ${row[mapping.name]}`);
+    if(mapping.stock>=0) parts.push(`<strong>Stock:</strong> ${row[mapping.stock]}`);
+    html += parts.join(' · ') || '(ajusta el mapeig)';
+    html += `</p>`;
+  }
+  area.innerHTML = html;
+}
+
+window.updateMapping = function(el){
+  mapping[el.dataset.field] = parseInt(el.value);
+  showMapping();
+};
+
+window.applyMapping = function(){
+  if(mapping.cn<0 || mapping.name<0 || mapping.stock<0){
+    toast('Cal seleccionar CN, Nom i Stock','error'); return;
+  }
+  catalog = {};
+  let imported = 0;
+  for(let i=1; i<importRows.length; i++){
+    const row = importRows[i];
+    let cn = String(row[mapping.cn]||'').trim().replace(/[^0-9]/g,'');
+    if(!cn) continue;
+    const name = String(row[mapping.name]||'').trim();
+    const stock = parseInt(row[mapping.stock]) || 0;
+    const ean = mapping.ean >= 0 ? String(row[mapping.ean]||'').trim().replace(/[^0-9]/g,'') : '';
+    catalog[cn] = { cn, name, stock, ean };
+    imported++;
+  }
+  document.getElementById('mapping-card').hidden = true;
+  importRows = null; importHeaders = null;
+  save();
+  toast(`${imported} productes importats`, 'success');
+  renderConfigView();
+  renderHeader();
+};
+
+/* ═══════════ LOOKUP ═══════════ */
+function normCN(code){
+  return String(code||'').trim().replace(/[^0-9]/g,'');
+}
+function extractCNfromEAN(ean){
+  if(ean.length === 13 && ean.startsWith('8470')){
+    let cn6 = ean.substring(4, 10);
+    let cn7 = ean.substring(4, 11);
+    if(catalog[cn6]) return cn6;
+    if(catalog[cn7]) return cn7;
+    let cn6n = cn6.replace(/^0+/,'');
+    let cn7n = cn7.replace(/^0+/,'');
+    for(const k of Object.keys(catalog)){
+      if(k === cn6n || k === cn7n) return k;
+    }
+    return cn6n || cn7n;
+  }
+  return null;
+}
+function lookup(code){
+  code = normCN(code);
+  if(!code) return null;
+  if(catalog[code]) return catalog[code];
+  let stripped = code.replace(/^0+/,'');
+  if(stripped && catalog[stripped]) return catalog[stripped];
+  for(const k of Object.keys(catalog)){
+    if(k.replace(/^0+/,'') === stripped) return catalog[k];
+  }
+  const cn = extractCNfromEAN(code);
+  if(cn && catalog[cn]) return catalog[cn];
+  for(const p of Object.values(catalog)){
+    if(p.ean && (p.ean === code || p.ean.replace(/^0+/,'') === stripped)) return p;
+  }
+  return null;
+}
+
+/* ═══════════ COUNTING ═══════════ */
+function getDiffs(){
+  const arr = Object.values(counts).map(c => {
+    const prod = catalog[c.cn] || {};
+    const farmatic = apiMode ? (c.farmatic ?? prod.stock ?? 0) : (prod.stock ?? c.farmatic ?? 0);
+    const diff = c.counted - farmatic;
+    return { ...c, farmatic, diff };
+  });
+  arr.sort((a,b) => Math.abs(b.diff) - Math.abs(a.diff));
+  return arr;
+}
+
+/* ═══════════ CAMERA ═══════════ */
+window.openCamera = function(){
+  if(typeof Html5Qrcode === 'undefined'){
+    toast('Càmera no disponible (llibreria no carregada)','error'); return;
+  }
+  document.getElementById('camera-overlay').hidden = false;
+  scanner = new Html5Qrcode('reader');
+  scanner.start(
+    { facingMode:'environment' },
+    { fps:10, qrbox:{ width:280, height:100 }, aspectRatio: 1.777 },
+    async (text) => {
+      closeCamera();
+      await processScan(text);
+    },
+    () => {}
+  ).catch(err => {
+    toast('No s\'ha pogut obrir la càmera','error');
+    document.getElementById('camera-overlay').hidden = true;
+    scanner = null;
+  });
+};
+window.closeCamera = function(){
+  if(scanner){
+    scanner.stop().then(() => { scanner.clear(); }).catch(()=>{});
+    scanner = null;
+  }
+  document.getElementById('camera-overlay').hidden = true;
+};
+
+/* ═══════════ SCAN PROCESSING ═══════════ */
+async function processScan(code){
+  code = normCN(code);
+  if(!code){ toast('Codi no vàlid','error'); return; }
+
+  let prod = null;
+  if(apiMode){
+    document.getElementById('product-area').innerHTML =
+      '<div class="product-result fade-in" style="text-align:center;padding:24px"><span style="color:var(--fg-muted)">Cercant...</span></div>';
+    prod = await apiLookup(code);
+  } else {
+    prod = lookup(code);
+  }
+
+  if(!prod){
+    beepErr(); vibrate(200);
+    showProductNotFound(code);
+    return;
+  }
+
+  const existing = counts[prod.cn];
+  if(existing){
+    const msSinceLast = Date.now() - new Date(existing.ts).getTime();
+    const TWO_HOURS = 2 * 60 * 60 * 1000;
+    if(msSinceLast < TWO_HOURS){
+      existing.counted += 1;
+      existing.ts = new Date().toISOString();
+      if(apiMode && prod.stock !== undefined) existing.farmatic = prod.stock;
+      save();
+      const diff = existing.counted - (existing.farmatic ?? 0);
+      const sign = diff > 0 ? '+' : '';
+      const diffTxt = diff === 0 ? 'OK' : sign + diff;
+      beepOk(); vibrate(50);
+      toast(`${prod.name} ×${existing.counted}  (dif: ${diffTxt})`, diff === 0 ? 'success' : 'error');
+      renderRecentList();
+      renderHeader();
+      showQuickCount(prod, existing);
+      return;
+    } else {
+      if(apiMode && prod.stock !== undefined) existing.farmatic = prod.stock;
+      curProduct = prod;
+      editCount(prod.cn);
+      beepOk(); vibrate(50);
+      return;
+    }
+  }
+
+  curProduct = prod;
+  showProductCard(prod);
+}
+
+function showProductCard(prod){
+  const area = document.getElementById('product-area');
+  area.innerHTML = `
+    <div class="product-result fade-in">
+      <div class="product-name">${esc(prod.name)}</div>
+      <div class="product-cn">CN: ${esc(prod.cn)}${prod.ean ? ' · EAN: '+esc(prod.ean) : ''}</div>
+      <div class="stock-row">
+        <div><div class="stock-label">Stock Farmatic</div><div class="stock-value">${prod.stock}</div></div>
+      </div>
+      <div class="stock-label" style="margin-bottom:6px">Quantes unitats reals hi ha?</div>
+      <div class="count-input-wrap">
+        <button class="adj-btn" onclick="adjCount(-1)">−</button>
+        <input class="count-input" id="count-val" type="text" inputmode="numeric"
+               placeholder="Unitats" autocomplete="off" value="1">
+        <button class="adj-btn" onclick="adjCount(+1)">+</button>
+      </div>
+      <button class="btn btn-primary btn-confirm" onclick="confirmCount()">Confirmar</button>
+      <p style="font-size:.75rem;color:var(--fg-muted);margin-top:8px;text-align:center">
+        O segueix escanejant per sumar +1 cada cop
+      </p>
+    </div>`;
+  setTimeout(() => {
+    const inp = document.getElementById('count-val');
+    if(inp){ inp.focus(); inp.select(); }
+  }, 100);
+}
+
+function showQuickCount(prod, entry){
+  const area = document.getElementById('product-area');
+  const diff = entry.counted - (entry.farmatic ?? 0);
+  const diffCls = diff === 0 ? 'ok' : (diff < 0 ? 'deficit' : 'surplus');
+  const sign = diff > 0 ? '+' : '';
+  area.innerHTML = `
+    <div class="product-result fade-in" style="padding:14px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div class="product-name" style="font-size:.9rem">${esc(prod.name)}</div>
+          <div class="product-cn">Farmatic: ${entry.farmatic ?? 0}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:1.6rem;font-weight:700;line-height:1">${entry.counted}</div>
+          <div style="font-size:.7rem;color:var(--fg-muted)">comptats</div>
+        </div>
+        <span class="diff-badge ${diffCls}" style="font-size:.85rem;padding:4px 10px">${diff===0?'OK':sign+diff}</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="editCount('${esc(prod.cn)}')">Editar quantitat</button>
+    </div>`;
+}
+
+function showProductNotFound(code){
+  const area = document.getElementById('product-area');
+  const hint = apiMode
+    ? 'El codi no existeix a la base de dades del Farmatic.'
+    : 'Comprova que el catàleg està importat i el codi és correcte.';
+  area.innerHTML = `
+    <div class="product-result not-found fade-in">
+      <div class="product-name" style="color:var(--red)">Producte no trobat</div>
+      <div class="product-cn">Codi: ${esc(code)}</div>
+      <p style="font-size:.85rem;color:var(--fg-mid);margin-top:8px">${hint}</p>
+    </div>`;
+}
+
+window.adjCount = function(delta){
+  const inp = document.getElementById('count-val');
+  if(!inp) return;
+  let v = parseInt(inp.value) || 0;
+  v += delta;
+  if(v < 0) v = 0;
+  inp.value = v;
+};
+
+window.confirmCount = function(){
+  if(!curProduct) return;
+  const inp = document.getElementById('count-val');
+  const val = inp ? inp.value.trim() : '';
+  if(val === ''){ toast('Introdueix un valor','error'); return; }
+  const num = parseInt(val);
+  if(isNaN(num) || num < 0){ toast('Valor no vàlid','error'); return; }
+  counts[curProduct.cn] = {
+    cn: curProduct.cn, name: curProduct.name, counted: num, zone: curZone,
+    farmatic: curProduct.stock,
+    ts: new Date().toISOString()
+  };
+  save();
+  const diff = num - curProduct.stock;
+  const sign = diff > 0 ? '+' : '';
+  if(diff === 0){ beepOk(); } else { beepDiff(); }
+  vibrate(diff === 0 ? 50 : [50,30,50]);
+  toast(diff === 0 ? 'OK — stock correcte' : `Diferència: ${sign}${diff}`, diff === 0 ? 'success' : 'error');
+  renderRecentList();
+  renderHeader();
+  document.getElementById('product-area').innerHTML = '';
+  curProduct = null;
+  setTimeout(() => { document.getElementById('cn-input').focus(); }, 200);
+};
+
+window.editCount = function(cn){
+  const entry = counts[cn];
+  if(!entry) return;
+  const prod = catalog[cn] || { cn, name: entry.name, stock: entry.farmatic ?? 0 };
+  curProduct = prod;
+  const area = document.getElementById('product-area');
+  area.innerHTML = `
+    <div class="product-result fade-in">
+      <div class="product-name">${esc(prod.name)}</div>
+      <div class="product-cn">CN: ${esc(prod.cn)}</div>
+      <div class="stock-row">
+        <div><div class="stock-label">Stock Farmatic</div><div class="stock-value">${entry.farmatic ?? 0}</div></div>
+      </div>
+      <div class="stock-label" style="margin-bottom:6px">Quantitat real:</div>
+      <div class="count-input-wrap">
+        <button class="adj-btn" onclick="adjCount(-1)">−</button>
+        <input class="count-input" id="count-val" type="text" inputmode="numeric"
+               placeholder="Unitats" autocomplete="off" value="${entry.counted}">
+        <button class="adj-btn" onclick="adjCount(+1)">+</button>
+      </div>
+      <button class="btn btn-primary btn-confirm" onclick="confirmCount()">Actualitzar</button>
+    </div>`;
+  setTimeout(() => {
+    const inp = document.getElementById('count-val');
+    if(inp){ inp.focus(); inp.select(); }
+  }, 100);
+};
+
+/* ═══════════ ZONES ═══════════ */
+window.addZone = function(){
+  const inp = document.getElementById('new-zone');
+  const name = inp.value.trim();
+  if(!name) return;
+  if(zones.includes(name)){ toast('Zona ja existent','error'); return; }
+  zones.push(name);
+  inp.value = '';
+  save();
+  renderZones();
+  renderZoneBar();
+};
+window.removeZone = function(name){
+  if(zones.length <= 1){ toast('Cal almenys una zona','error'); return; }
+  zones = zones.filter(z => z !== name);
+  if(curZone === name) curZone = zones[0];
+  save();
+  renderZones();
+  renderZoneBar();
+};
+window.selectZone = function(name){
+  curZone = name;
+  save();
+  renderZoneBar();
+};
+
+/* ═══════════ EXPORT ═══════════ */
+function makeCSV(rows){
+  return rows.map(r => r.map(c => {
+    const s = String(c);
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? '"'+s.replace(/"/g,'""')+'"' : s;
+  }).join(',')).join('\n');
+}
+
+async function downloadCSV(content, filename){
+  const blob = new Blob(['﻿'+content], { type:'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  return true;
+}
+
+window.exportReport = async function(){
+  const diffs = getDiffs();
+  if(!diffs.length){ toast('No hi ha recomptes','error'); return; }
+  const rows = [['CN','Nom','Stock Farmatic','Recompte','Diferència','Zona','Data/Hora']];
+  for(const d of diffs){
+    const sign = d.diff > 0 ? '+' : '';
+    rows.push([d.cn, d.name, d.farmatic, d.counted, sign+d.diff, d.zone, new Date(d.ts).toLocaleString('ca')]);
+  }
+  const date = new Date().toISOString().slice(0,10);
+  const ok = await downloadCSV(makeCSV(rows), `stockcheck_informe_${date}.csv`);
+  if(ok) toast('Informe descarregat','success');
+};
+
+window.exportFarmatic = async function(){
+  const diffs = getDiffs().filter(d => d.diff !== 0);
+  if(!diffs.length){ toast('No hi ha diferències','error'); return; }
+  const rows = [['CN','Stock Nou','Diferència']];
+  for(const d of diffs){
+    const sign = d.diff > 0 ? '+' : '';
+    rows.push([d.cn, d.counted, sign+d.diff]);
+  }
+  const date = new Date().toISOString().slice(0,10);
+  const ok = await downloadCSV(makeCSV(rows), `stockcheck_farmatic_${date}.csv`);
+  if(ok) toast('Fitxer Farmatic descarregat','success');
+};
+
+/* ═══════════ ADJUST STOCK ═══════════ */
+window.openAdjustModal = function(){
+  const diffs = getDiffs().filter(d => d.diff !== 0);
+  if(!diffs.length){ toast('No hi ha diferències per aplicar','error'); return; }
+  document.getElementById('adjust-summary').textContent =
+    `S'aplicaran ${diffs.length} correccions d'stock a Farmatic.`;
+  document.getElementById('adjust-pwd').value = '';
+  document.getElementById('adjust-progress').hidden = true;
+  document.getElementById('btn-apply-adjust').disabled = false;
+  document.getElementById('adjust-modal').hidden = false;
+  setTimeout(() => document.getElementById('adjust-pwd').focus(), 100);
+};
+window.closeAdjustModal = function(){
+  document.getElementById('adjust-modal').hidden = true;
+};
+window.applyAdjustments = async function(){
+  const pwd = document.getElementById('adjust-pwd').value.trim();
+  if(!pwd){ toast('Introdueix la contrasenya','error'); return; }
+
+  const diffs = getDiffs().filter(d => d.diff !== 0);
+  if(!diffs.length){ closeAdjustModal(); return; }
+
+  const btn = document.getElementById('btn-apply-adjust');
+  btn.disabled = true;
+  btn.textContent = 'Aplicant...';
+  document.getElementById('adjust-progress').hidden = false;
+
+  const adjustments = diffs.map(d => ({ cn: d.cn, stock: d.counted }));
+
+  try {
+    const resp = await fetch(`${apiBase}/api/adjust`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd, adjustments })
+    });
+    const data = await resp.json();
+
+    if(!resp.ok || !data.ok){
+      toast(data.error || 'Error aplicant ajustos', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Aplicar';
+      document.getElementById('adjust-progress').hidden = true;
+      return;
+    }
+
+    document.getElementById('adjust-bar').style.width = '100%';
+    document.getElementById('adjust-status').textContent =
+      `${data.applied}/${data.total} aplicats correctament`;
+
+    for(const r of data.results){
+      if(r.ok && counts[r.cn]){
+        counts[r.cn].farmatic = r.new;
+      }
+    }
+    save();
+
+    const failed = data.results.filter(r => !r.ok);
+    if(failed.length){
+      toast(`${data.applied} aplicats, ${failed.length} errors`, 'error');
+    } else {
+      toast(`${data.applied} correccions aplicades a Farmatic`, 'success');
+    }
+
+    setTimeout(() => {
+      closeAdjustModal();
+      renderResultsView();
+    }, 1200);
+
+  } catch(e){
+    toast('Error de connexió amb el servidor', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Aplicar';
+    document.getElementById('adjust-progress').hidden = true;
+  }
+};
+
+/* ═══════════ CLEAR ═══════════ */
+window.clearCatalog = function(){
+  if(!Object.keys(catalog).length) return;
+  catalog = {};
+  save();
+  toast('Catàleg esborrat','success');
+  renderConfigView();
+  renderHeader();
+};
+window.clearCounts = function(){
+  if(!Object.keys(counts).length) return;
+  counts = {};
+  save();
+  toast('Recomptes esborrats','success');
+  renderRecentList();
+  renderHeader();
+  renderResultsView();
+};
+
+/* ═══════════ RENDER ═══════════ */
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function renderHeader(){
+  const n = Object.keys(counts).length;
+  document.getElementById('hdr-count').textContent = n + ' comptats';
+  const hdr = document.querySelector('.hdr h1');
+  const existing = document.getElementById('api-indicator');
+  if(existing) existing.remove();
+  if(apiMode){
+    const dot = document.createElement('span');
+    dot.id = 'api-indicator';
+    dot.title = 'Connectat a Farmatic SQL';
+    dot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green,#22c55e);margin-left:8px;vertical-align:middle';
+    hdr.appendChild(dot);
+  }
+}
+
+function renderZoneBar(){
+  const bar = document.getElementById('zone-bar');
+  bar.innerHTML = zones.map(z =>
+    `<button class="zone-chip ${z===curZone?'active':''}" onclick="selectZone('${esc(z)}')">${esc(z)}</button>`
+  ).join('');
+}
+
+function renderZones(){
+  const area = document.getElementById('zones-area');
+  if(!area) return;
+  area.innerHTML = zones.map(z => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="flex:1;font-size:.85rem;font-weight:500">${esc(z)}</span>
+      ${zones.length > 1 ? `<button class="recent-del" onclick="removeZone('${esc(z)}')" title="Eliminar zona">&times;</button>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderRecentList(){
+  const area = document.getElementById('recent-area');
+  const arr = Object.values(counts)
+    .filter(c => c.zone === curZone)
+    .sort((a,b) => new Date(b.ts) - new Date(a.ts))
+    .slice(0, 20);
+  if(!arr.length){
+    area.innerHTML = '';
+    return;
+  }
+  let html = '<div class="recent-list card" style="margin-top:14px"><div class="card-title">Últims recomptes</div>';
+  for(const c of arr){
+    const farStock = apiMode ? (c.farmatic ?? 0) : (catalog[c.cn]?.stock ?? c.farmatic ?? 0);
+    const diff = c.counted - farStock;
+    const cls = diff === 0 ? 'ok' : (diff < 0 ? 'deficit' : 'surplus');
+    const sign = diff > 0 ? '+' : '';
+    html += `<div class="recent-item" onclick="editCount('${esc(c.cn)}')" style="cursor:pointer">
+      <span class="cn">${esc(c.cn)}</span>
+      <span class="name">${esc(c.name)}</span>
+      <span class="counted-badge">${c.counted}</span>
+      <span class="diff-badge ${cls}">${diff===0?'OK':sign+diff}</span>
+      <button class="recent-del" onclick="event.stopPropagation();deleteCount('${esc(c.cn)}')" title="Eliminar">&times;</button>
+    </div>`;
+  }
+  html += '</div>';
+  area.innerHTML = html;
+}
+
+window.deleteCount = function(cn){
+  delete counts[cn];
+  save();
+  renderRecentList();
+  renderHeader();
+};
+
+function renderResultsView(){
+  const all = getDiffs();
+  const withDiff = all.filter(d => d.diff !== 0);
+  const deficits = all.filter(d => d.diff < 0);
+  const surplus  = all.filter(d => d.diff > 0);
+  const totalDef = deficits.reduce((s,d) => s + d.diff, 0);
+  const totalSur = surplus.reduce((s,d) => s + d.diff, 0);
+
+  document.getElementById('stats-area').innerHTML = `
+    <div class="stat-card"><div class="stat-value">${all.length}</div><div class="stat-label">Comptats</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--red)">${withDiff.length}</div><div class="stat-label">Diferències</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--red)">${totalDef}</div><div class="stat-label">Falta</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--amber)">${totalSur>0?'+':''}${totalSur}</div><div class="stat-label">Sobra</div></div>
+  `;
+
+  const filters = [
+    { key:'all', label:`Tots (${all.length})` },
+    { key:'diff', label:`Diferències (${withDiff.length})` },
+    { key:'deficit', label:`Falten (${deficits.length})` },
+    { key:'surplus', label:`Sobren (${surplus.length})` },
+    { key:'ok', label:`OK (${all.length - withDiff.length})` },
+  ];
+  document.getElementById('filter-bar').innerHTML = filters.map(f =>
+    `<button class="filter-chip ${filter===f.key?'active':''}" onclick="setFilter('${f.key}')">${f.label}</button>`
+  ).join('');
+
+  let filtered = all;
+  if(filter==='diff') filtered = withDiff;
+  else if(filter==='deficit') filtered = deficits;
+  else if(filter==='surplus') filtered = surplus;
+  else if(filter==='ok') filtered = all.filter(d => d.diff === 0);
+
+  const ta = document.getElementById('diff-table-area');
+  if(!filtered.length){
+    ta.innerHTML = '<div class="empty-state" style="padding:30px"><p>Sense resultats</p></div>';
+    return;
+  }
+  let html = `<table class="diff-table">
+    <thead><tr>
+      <th>Producte</th><th class="num">Farmatic</th><th class="num">Real</th><th class="num">Dif.</th><th>Zona</th>
+    </tr></thead><tbody>`;
+  for(const d of filtered){
+    const cls = d.diff < 0 ? 'has-diff' : (d.diff > 0 ? 'has-surplus' : '');
+    const sign = d.diff > 0 ? '+' : '';
+    const diffCls = d.diff === 0 ? 'ok' : (d.diff < 0 ? 'deficit' : 'surplus');
+    html += `<tr class="${cls}">
+      <td class="product-cell"><div class="pname">${esc(d.name)}</div><div class="pcn">${esc(d.cn)}</div></td>
+      <td class="num">${d.farmatic}</td>
+      <td class="num" style="font-weight:600">${d.counted}</td>
+      <td class="num"><span class="diff-badge ${diffCls}">${d.diff===0?'OK':sign+d.diff}</span></td>
+      <td style="font-size:.75rem;color:var(--fg-muted)">${esc(d.zone)}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  ta.innerHTML = html;
+
+  const adjArea = document.getElementById('adjust-area');
+  if(adjArea){
+    if(apiMode && withDiff.length > 0){
+      adjArea.innerHTML = `
+        <button class="btn adjust-btn-apply" style="width:100%;margin-top:12px;background:var(--red);color:#fff" onclick="openAdjustModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+          Aplicar ${withDiff.length} correccions a Farmatic
+        </button>`;
+    } else {
+      adjArea.innerHTML = '';
+    }
+  }
+}
+
+function renderConfigView(){
+  const body = document.getElementById('settings-body');
+  if(!body) return;
+  const catSize = Object.keys(catalog).length;
+  const cntSize = Object.keys(counts).length;
+
+  let connHtml = '';
+  if(apiMode){
+    connHtml = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--green,#22c55e);display:inline-block"></span>
+        <span style="font-weight:600;color:var(--green,#22c55e)">Connectat a Farmatic</span>
+      </div>
+      <div class="info-row"><span class="label">Mode</span><span class="value">SQL Server (temps real)</span></div>
+      ${apiStats ? `<div class="info-row"><span class="label">Articles</span><span class="value">${apiStats.total_articles?.toLocaleString('ca')} total · ${apiStats.amb_stock?.toLocaleString('ca')} amb stock</span></div>` : ''}
+      <div class="info-row"><span class="label">Recomptes</span><span class="value">${cntSize.toLocaleString('ca')}</span></div>`;
+  } else if(catSize > 0){
+    connHtml = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--amber,#f59e0b);display:inline-block"></span>
+        <span style="font-weight:600;color:var(--amber,#f59e0b)">Mode CSV offline</span>
+      </div>
+      <div class="info-row"><span class="label">Catàleg</span><span class="value">${catSize.toLocaleString('ca')} productes</span></div>
+      <div class="info-row"><span class="label">Recomptes</span><span class="value">${cntSize.toLocaleString('ca')}</span></div>`;
+  } else {
+    connHtml = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--fg-muted);display:inline-block"></span>
+        <span style="font-weight:500;color:var(--fg-muted)">Sense connexió</span>
+      </div>
+      <div style="font-size:.82rem;color:var(--fg-muted)">Obre <strong>localhost:5555</strong> al PC per connectar amb Farmatic, o importa un CSV.</div>`;
+  }
+
+  const zonesHtml = zones.map(z => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="flex:1;font-size:.85rem;font-weight:500">${esc(z)}</span>
+      ${zones.length > 1 ? `<button class="recent-del" onclick="removeZone('${esc(z)}')" title="Eliminar zona">&times;</button>` : ''}
+    </div>
+  `).join('');
+
+  body.innerHTML = `
+    <div class="settings-section">
+      <div class="settings-section-title">Connexió</div>
+      ${connHtml}
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Zones</div>
+      <div id="zones-area">${zonesHtml}</div>
+      <div class="input-row" style="margin-top:10px">
+        <input class="input-field" id="new-zone" placeholder="Nova zona..." style="font-size:.85rem">
+        <button class="btn btn-secondary btn-sm" onclick="addZone()">Afegir</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Exportar</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary" onclick="exportReport()" id="btn-export-report">Informe de diferències (CSV)</button>
+        <button class="btn btn-outline" onclick="exportFarmatic()" id="btn-export-farmatic">Ajustos per Farmatic (CSV)</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Dades</div>
+      <button class="btn btn-outline btn-sm" style="color:var(--red);width:100%" onclick="if(confirm('Esborrar tots els recomptes?'))clearCounts()">Esborrar recomptes actuals</button>
+      ${!apiMode && catSize > 0 ? `<button class="btn btn-outline btn-sm" style="color:var(--red);width:100%;margin-top:8px" onclick="if(confirm('Esborrar catàleg CSV?'))clearCatalog()">Esborrar catàleg CSV</button>` : ''}
+    </div>
+
+    <div class="settings-section" style="border-top:1px solid var(--border);padding-top:16px">
+      <button class="btn btn-outline btn-sm" style="width:100%;color:var(--fg-muted);font-size:.78rem" onclick="document.getElementById('file-input').click()">
+        Importar CSV (mode offline)
+      </button>
+    </div>
+  `;
+}
+
+window.toggleSettings = function(){
+  const ov = document.getElementById('settings-overlay');
+  if(ov.hidden){
+    renderConfigView();
+    ov.hidden = false;
+  } else {
+    ov.hidden = true;
+  }
+};
+
+window.toggleCsvImport = function(){}; // legacy stub
+
+function renderScanView(){
+  renderZoneBar();
+  renderRecentList();
+  if(!Object.keys(counts).length){
+    document.getElementById('product-area').innerHTML = '';
+  }
+}
+
+/* ═══════════ TABS ═══════════ */
+window.switchTab = function(tab){
+  activeTab = tab;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('v-'+tab).classList.add('active');
+  document.querySelector(`.tab-btn[data-tab="${tab}"]`).classList.add('active');
+  if(tab === 'results') renderResultsView();
+  if(tab === 'scan') renderScanView();
+};
+
+window.setFilter = function(f){
+  filter = f;
+  renderResultsView();
+};
+
+/* ═══════════ TOAST ═══════════ */
+let toastTimer;
+function toast(msg, type){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + (type||'success') + ' show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+/* ═══════════ EVENTS ═══════════ */
+document.getElementById('cn-input').addEventListener('keydown', async function(e){
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    const code = this.value.trim();
+    if(code){
+      this.value = '';
+      await processScan(code);
+    }
+  }
+});
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Enter' && document.activeElement && document.activeElement.id === 'count-val'){
+    e.preventDefault();
+    confirmCount();
+  }
+  if(e.key === 'Enter' && document.activeElement && document.activeElement.id === 'adjust-pwd'){
+    e.preventDefault();
+    applyAdjustments();
+  }
+});
+document.getElementById('file-input').addEventListener('change', function(){
+  if(this.files.length) handleFile(this.files[0]);
+  this.value = '';
+});
+
+/* ═══════════ INIT ═══════════ */
+load();
+renderHeader();
+renderZoneBar();
+renderScanView();
+// Detect API server
+(async () => {
+  const found = await detectAPI();
+  if(found){
+    toast('Connectat a Farmatic','success');
+    renderHeader();
+    renderScanView();
+  }
+})();
+
+// Focus CN input on load
+setTimeout(() => { document.getElementById('cn-input').focus(); }, 300);
+
+})();
+</script>
+</body>
+</html>
