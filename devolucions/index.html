@@ -456,6 +456,7 @@
       <div class="product-list">
         <div class="product-list-header">
           <h3>Productes a retornar (<span id="productCount">0</span>)</h3>
+          <button class="btn btn-sm btn-outline" onclick="restoreLast()" id="restoreBtn" style="display:none">↩ Recuperar última llista</button>
           <button class="btn btn-sm btn-outline" onclick="clearAll()" id="clearBtn" style="display:none">
             Netejar tot
           </button>
@@ -608,6 +609,22 @@
       renderList();
     }
 
+    function updateRestoreBtn() {
+      const b = document.getElementById('restoreBtn'); if (!b) return;
+      let has = false;
+      try { const l = JSON.parse(localStorage.getItem('farmacia_devolucions_ultima') || '[]'); has = l.length > 0; } catch(e) {}
+      b.style.display = (has && products.length === 0) ? '' : 'none';
+    }
+
+    function restoreLast() {
+      try {
+        const l = JSON.parse(localStorage.getItem('farmacia_devolucions_ultima') || '[]');
+        if (!l.length) return;
+        products = l; renderList(); updateRestoreBtn();
+        showToast('↩ Última llista recuperada');
+      } catch(e) {}
+    }
+
     function clearAll() {
       if (!confirm('Segur que vols netejar tota la llista?')) return;
       products = [];
@@ -693,7 +710,14 @@
       }
 
       if (handled) {
-        showToast('🚀 Portal obert — l\'script processarà les devolucions automàticament');
+        // La llista ja ha passat al portal: la buidem perquè no quedi el CN anterior.
+        // Guardem una còpia per si cal recuperar-la (botó "Recuperar última llista").
+        try { localStorage.setItem('farmacia_devolucions_ultima', JSON.stringify(products)); } catch(e) {}
+        products = [];
+        renderList();
+        updateRestoreBtn();
+        const cnIn = document.getElementById('cnInput'); if (cnIn) { cnIn.value = ''; cnIn.focus(); }
+        showToast('🚀 Portal obert — llista buidada (la pots recuperar si cal)');
       } else {
         // L'script v2 no ha respost — avisar
         showToast('⚠ L\'script no ha respost. Actualitza l\'userscript o fes servir el mode manual.');
@@ -801,6 +825,7 @@
     renderList = function() {
       origRender();
       saveState();
+      updateRestoreBtn();
     };
 
     // Load saved state
