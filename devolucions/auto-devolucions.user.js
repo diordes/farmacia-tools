@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Farmàcia Central BCN — Auto Devolucions
 // @namespace    https://diordes.github.io/farmacia-tools
-// @version      2.0.7
+// @version      2.0.8
 // @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare)
 // @author       Farmàcia Central BCN
 // @match        https://my.alliance-healthcare.es/*
@@ -38,7 +38,7 @@
   // ══════════════════════════════════════════════
 
   function log(msg, ...args) {
-    console.log(`[AutoDevolucions v2.0.7] ${msg}`, ...args);
+    console.log(`[AutoDevolucions v2.0.8] ${msg}`, ...args);
   }
 
   function sleep(ms) {
@@ -186,7 +186,7 @@
     ov.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">🔄</span>
-        <strong style="font-size:14px">Auto Devolucions v2.0.7</strong>
+        <strong style="font-size:14px">Auto Devolucions v2.0.8</strong>
         <span id="fa-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px;background:#3b82f6;color:white;font-weight:600">Processant...</span>
       </div>
       <div id="fa-log" style="max-height:220px;overflow-y:auto;font-size:12px;color:#94a3b8"></div>
@@ -610,18 +610,33 @@
       }
       if (rows.length === 0) return null;
 
-      // Buscar coincidència exacta de CN
+      // Buscar coincidència de CN: 6 xifres (sense dígit de control) o 7 (amb dígit de control)
+      const want = String(product.cn).replace(/\D/g, '').replace(/^0+/, '');
+      const cnMatches = (num) => {
+        const n = num.replace(/^0+/, '');
+        if (!n || !want) return false;
+        if (n === want) return true;
+        if (n.length === want.length + 1 && n.startsWith(want)) return true;   // 702850 ↔ 7028501
+        if (want.length === n.length + 1 && want.startsWith(n)) return true;   // 7028501 ↔ 702850
+        return false;
+      };
       for (const row of rows) {
-        const firstCell = row.querySelector('td');
-        if (!firstCell) continue;
-        const cellText = firstCell.textContent.trim();
-        // Match exacte o match sense dígit de control (últim dígit)
-        if (cellText === product.cn ||
-            cellText === product.cn.slice(0, -1) ||
-            product.cn === cellText.slice(0, -1)) {
+        // Mirar totes les cel·les i tots els números de la fila (el CN pot anar amb espais, punts o text)
+        const cells = [...row.querySelectorAll('td')];
+        const nums = [];
+        for (const c of cells) {
+          const t = (c.innerText || c.textContent || '');
+          (t.match(/\d[\d.\s-]{4,9}\d/g) || []).forEach(m => nums.push(m.replace(/\D/g, '')));
+          (t.match(/\d{5,8}/g) || []).forEach(m => nums.push(m));
+        }
+        if (nums.some(cnMatches)) {
           return row.querySelector('td[ng-click="nextStep(product)"]') || row.querySelector('td[ng-click]') || row.querySelector('td');
         }
       }
+      try {
+        const first = rows[0];
+        status(`🔧 1a fila: <code>${[...first.querySelectorAll('td')].map(c => (c.innerText || c.textContent).trim().slice(0, 30)).join(' | ')}</code>`, 'warn');
+      } catch (e) {}
 
       // Si hi ha resultats però cap coincideix, retornar un marcador especial
       // per distingir "no results" de "results but no match"
@@ -949,8 +964,8 @@
 
   function initFarmaciaPage() {
     // Anunciar presència — DOM attribute (funciona sempre, compartit entre sandbox i pàgina)
-    document.documentElement.setAttribute('data-farmacia-script', '2.0.7');
-    log('Script v2.0.7 active on farmacia-tools page');
+    document.documentElement.setAttribute('data-farmacia-script', '2.0.8');
+    log('Script v2.0.8 active on farmacia-tools page');
 
     // Fallback: unsafeWindow global (pot fallar en Chrome nou + Tampermonkey sandbox)
     try { unsafeWindow.__FARMACIA_DEVOLUCIONS_SCRIPT__ = true; } catch(e) {
