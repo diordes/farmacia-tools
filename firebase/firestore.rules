@@ -32,6 +32,32 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Conciliació amb Farmatic: també NOMÉS afegir i llegir (l'estat vigent és l'últim doc per ref_doc_id)
+    function validConc(d) {
+      return d.keys().hasAll(['ts', 'ref_doc_id', 'cn', 'estat'])
+        && d.keys().hasOnly(['ts', 'ref_doc_id', 'run_id', 'cn', 'qty', 'estat', 'farmatic_data',
+                             'farmatic_unitats', 'farmatic_albara_devolucion',
+                             'farmatic_devolucion_mayorista_id', 'detall'])
+        && d.ts == request.time
+        && d.ref_doc_id is string && d.ref_doc_id.size() > 0 && d.ref_doc_id.size() <= 64
+        && exists(/databases/$(database)/documents/devolucions/$(d.ref_doc_id))
+        && d.estat in ['farmatic_ok', 'farmatic_no_trobat', 'quantitat_diferent']
+        && d.cn is string && d.cn.size() <= 20
+        && optStr(d, 'run_id', 64)
+        && (!('qty' in d) || (d.qty is int && d.qty >= 0 && d.qty <= 9999))
+        && (!('farmatic_unitats' in d) || (d.farmatic_unitats is int && d.farmatic_unitats >= -9999 && d.farmatic_unitats <= 9999))
+        && optStr(d, 'farmatic_data', 10)
+        && optStr(d, 'farmatic_albara_devolucion', 60)
+        && optStr(d, 'farmatic_devolucion_mayorista_id', 40)
+        && optStr(d, 'detall', 2000);
+    }
+
+    match /conciliacio/{docId} {
+      allow read: if true;
+      allow create: if validConc(request.resource.data);
+      allow update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

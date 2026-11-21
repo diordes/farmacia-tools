@@ -396,6 +396,11 @@
     .reg-error_afegir { background:#fee2e2; color:#991b1b; }
     .reg-confirmat_enviar { background:#fef3c7; color:#92400e; }
     .reg-prova { background:#e5e7eb; color:#374151; }
+    .reg-farm { font-weight: 600; font-size: 0.74rem; }
+    .reg-farm-ok { color: #166534; }
+    .reg-farm-warn { color: #b45309; white-space: normal; }
+    .reg-farm-pend { color: var(--text-secondary); font-weight: 400; }
+    #registreCount { font-weight: 600; }
   </style>
 </head>
 <body>
@@ -512,13 +517,14 @@
       <!-- Registre (només lectura) -->
       <div class="registre-section">
         <h3>🗂 Registre <span id="registreStatus" class="status-badge status-missing" style="font-size:0.7rem">Carregant...</span>
-          <button class="btn btn-sm btn-outline" style="margin-left:auto" onclick="window.Registre && window.Registre.refresh()">↻ Actualitzar</button>
+          <button class="btn btn-sm btn-outline" style="margin-left:auto" id="btnRegistreAll" onclick="window.Registre && window.Registre.toggleAll()">Veure-ho tot</button>
+          <button class="btn btn-sm btn-outline" onclick="window.Registre && window.Registre.refresh()">↻ Actualitzar</button>
         </h3>
-        <div class="registre-note">Cada devolució queda registrada automàticament i <b>no es pot modificar ni esborrar</b>. Últims 100 esdeveniments.</div>
+        <div class="registre-note">Cada devolució queda registrada automàticament i <b>no es pot modificar ni esborrar</b>. La columna «Farmàtic» indica si la devolució ja consta a Farmàtic. <span id="registreCount"></span></div>
         <div class="registre-wrap">
           <table class="registre-table">
-            <thead><tr><th>Data i hora</th><th>Esdeveniment</th><th>CN</th><th>Quant.</th><th>Motiu</th><th>Albarà</th><th>Origen</th><th>Execució</th></tr></thead>
-            <tbody id="registreBody"><tr><td colspan="8">—</td></tr></tbody>
+            <thead><tr><th>Data i hora</th><th>Esdeveniment</th><th>CN</th><th>Quant.</th><th>Motiu</th><th>Albarà</th><th>Farmàtic</th><th>Origen</th><th>Execució</th></tr></thead>
+            <tbody id="registreBody"><tr><td colspan="9">—</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -892,28 +898,91 @@
 
     const fmt = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+    // ── Lectura del registre ──
+    const PAGE = 500;            // mida de pàgina en carregar-ho tot
+    let showAll = false;
+
+    async function fetchAll(collName, order = 'desc') {
+      const out = [];
+      let last = null;
+      for (;;) {
+        const parts = [fs.collection(db, collName), fs.orderBy('ts', order)];
+        if (last) parts.push(fs.startAfter(last));
+        parts.push(fs.limit(PAGE));
+        const snap = await fs.getDocs(fs.query(...parts));
+        out.push(...snap.docs);
+        if (snap.size < PAGE) return out;
+        last = snap.docs[snap.docs.length - 1];
+      }
+    }
+
+    const cn6 = (c) => { const d = String(c || '').replace(/\D/g, ''); return d.length === 7 ? d.slice(0, 6) : d; };
+    const CONC_TIPUS = ['enviat_al_portal', 'afegit_llista', 'confirmat_enviar'];
+
+    async function loadConciliacio() {
+      // Últim document per ref_doc_id (i per run_id+CN per a les altres línies de la mateixa devolució)
+      const byRef = {}, byRun = {};
+      try {
+        const docs = await fetchAll('conciliacio', 'asc');
+        for (const doc of docs) {
+          const c = doc.data();
+          byRef[c.ref_doc_id] = c;
+          if (c.run_id) byRun[c.run_id + '|' + cn6(c.cn)] = c;
+        }
+      } catch (e) { console.warn('[Registre] conciliacio', e); }
+      return { byRef, byRun };
+    }
+
+    function farmaticCell(id, d, conc) {
+      if (!CONC_TIPUS.includes(d.tipus)) return '';
+      const c = conc.byRef[id] || conc.byRun[(d.run_id || '') + '|' + cn6(d.cn)];
+      if (!c) return '<span class="reg-farm reg-farm-pend">— pendent</span>';
+      if (c.estat === 'farmatic_ok') {
+        const info = [c.farmatic_data, c.farmatic_albara_devolucion].filter(Boolean).join(' · ');
+        return `<span class="reg-farm reg-farm-ok" title="${esc(info)}">✅ Farmàtic OK</span>`;
+      }
+      const txt = c.estat === 'quantitat_diferent' ? 'Quantitat diferent' : 'No trobat a Farmàtic';
+      return `<span class="reg-farm reg-farm-warn" title="${esc(c.detall || '')}">⚠ ${esc(txt)}${c.detall ? ': ' + esc(c.detall) : ''}</span>`;
+    }
+
     async function refresh() {
       const body = document.getElementById('registreBody');
-      if (!db) { body.innerHTML = `<tr><td colspan="8">Registre ${esc(initErr || 'no disponible')}</td></tr>`; return; }
+      const countEl = document.getElementById('registreCount');
+      const btnAll = document.getElementById('btnRegistreAll');
+      if (!db) { body.innerHTML = `<tr><td colspan="9">Registre ${esc(initErr || 'no disponible')}</td></tr>`; return; }
       try {
-        const q = fs.query(fs.collection(db, cfg.collection || 'devolucions'), fs.orderBy('ts', 'desc'), fs.limit(100));
-        const snap = await fs.getDocs(q);
-        if (snap.empty) { body.innerHTML = '<tr><td colspan="8">Encara no hi ha cap esdeveniment.</td></tr>'; return; }
-        body.innerHTML = snap.docs.map(doc => {
+        const collName = cfg.collection || 'devolucions';
+        let docs;
+        if (showAll) {
+          body.innerHTML = '<tr><td colspan="9">Carregant tot el registre...</td></tr>';
+          docs = await fetchAll(collName, 'desc');
+        } else {
+          const snap = await fs.getDocs(fs.query(fs.collection(db, collName), fs.orderBy('ts', 'desc'), fs.limit(100)));
+          docs = snap.docs;
+        }
+        let total = docs.length;
+        try { total = (await fs.getCountFromServer(fs.collection(db, collName))).data().count; } catch (e) { console.warn('[Registre] count', e); }
+        countEl.textContent = showAll ? `${total} esdeveniment(s) en total — es mostren tots` : `${total} esdeveniment(s) en total — es mostren els últims ${Math.min(100, docs.length)}`;
+        btnAll.textContent = showAll ? 'Veure només els últims 100' : 'Veure-ho tot';
+        if (!docs.length) { body.innerHTML = '<tr><td colspan="9">Encara no hi ha cap esdeveniment.</td></tr>'; return; }
+        const conc = await loadConciliacio();
+        body.innerHTML = docs.map(doc => {
           const d = doc.data();
           const ts = d.ts && d.ts.toDate ? fmt.format(d.ts.toDate()) : '';
           const motiu = d.motiu_codi ? `${esc(d.motiu_codi)} ${esc(d.motiu_text || REASONS[d.motiu_codi] || '')}` : '';
           return `<tr title="${esc(d.detall || '')}"><td>${ts}</td><td><span class="reg-tipus reg-${esc(d.tipus)}">${esc(TIPUS[d.tipus] || d.tipus)}</span></td>` +
-            `<td>${esc(d.cn)}</td><td>${esc(d.qty)}</td><td>${motiu}</td><td>${esc(d.albara)}</td><td>${esc(d.origen)}</td><td style="font-family:monospace">${esc(String(d.run_id || '').slice(-10))}</td></tr>`;
+            `<td>${esc(d.cn)}</td><td>${esc(d.qty)}</td><td>${motiu}</td><td>${esc(d.albara)}</td><td>${farmaticCell(doc.id, d, conc)}</td><td>${esc(d.origen)}</td><td style="font-family:monospace">${esc(String(d.run_id || '').slice(-10))}</td></tr>`;
         }).join('');
       } catch (e) {
-        body.innerHTML = `<tr><td colspan="8">Error llegint el registre: ${esc(e.code || e.message)}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="9">Error llegint el registre: ${esc(e.code || e.message)}</td></tr>`;
       }
     }
 
+    function toggleAll() { showAll = !showAll; refresh(); }
+
     window.Registre = {
       config: () => (cfg && cfg.projectId ? { projectId: cfg.projectId, apiKey: cfg.apiKey, collection: cfg.collection || 'devolucions', baseUrl: cfg.emulatorHost ? 'http://' + cfg.emulatorHost : undefined } : null),
-      logSent, refresh
+      logSent, refresh, toggleAll
     };
     init();
   </script>
