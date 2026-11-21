@@ -1,0 +1,39 @@
+rules_version = '2';
+// Registre de devolucions — NOMÉS afegir i llegir. Ningú pot modificar ni esborrar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function optStr(d, k, max) {
+      return !(k in d) || (d[k] is string && d[k].size() <= max);
+    }
+
+    function validEvent(d) {
+      return d.keys().hasAll(['ts', 'tipus', 'run_id', 'majorista', 'origen'])
+        && d.keys().hasOnly(['ts', 'tipus', 'run_id', 'cn', 'qty', 'motiu_codi', 'motiu_text',
+                             'albara', 'majorista', 'origen', 'user_agent', 'detall', 'n_productes'])
+        && d.ts == request.time
+        && d.tipus in ['enviat_al_portal', 'afegit_llista', 'error_afegir', 'confirmat_enviar', 'prova']
+        && d.run_id is string && d.run_id.size() > 0 && d.run_id.size() <= 64
+        && d.majorista == 'alliance'
+        && d.origen in ['pagina', 'userscript', 'prova']
+        && optStr(d, 'cn', 20)
+        && (!('qty' in d) || (d.qty is int && d.qty >= 0 && d.qty <= 9999))
+        && (!('n_productes' in d) || (d.n_productes is int && d.n_productes >= 0 && d.n_productes <= 500))
+        && optStr(d, 'motiu_codi', 8)
+        && optStr(d, 'motiu_text', 80)
+        && optStr(d, 'albara', 200)
+        && optStr(d, 'user_agent', 400)
+        && optStr(d, 'detall', 2000);
+    }
+
+    match /devolucions/{docId} {
+      allow read: if true;
+      allow create: if validEvent(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Farmàcia Central BCN — Auto Devolucions
 // @namespace    https://diordes.github.io/farmacia-tools
-// @version      2.0.10
+// @version      2.1.0
 // @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare)
 // @author       Farmàcia Central BCN
 // @match        https://my.alliance-healthcare.es/*
@@ -11,6 +11,8 @@
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        unsafeWindow
+// @grant        GM_xmlhttpRequest
+// @connect      firestore.googleapis.com
 // @updateURL    https://raw.githubusercontent.com/diordes/farmacia-tools/main/devolucions/auto-devolucions.user.js
 // @downloadURL  https://raw.githubusercontent.com/diordes/farmacia-tools/main/devolucions/auto-devolucions.user.js
 // @run-at       document-idle
@@ -38,7 +40,7 @@
   // ══════════════════════════════════════════════
 
   function log(msg, ...args) {
-    console.log(`[AutoDevolucions v2.0.10] ${msg}`, ...args);
+    console.log(`[AutoDevolucions v2.1.0] ${msg}`, ...args);
   }
 
   function sleep(ms) {
@@ -138,12 +140,153 @@
   }
 
   // ══════════════════════════════════════════════
+  //  REGISTRE (Firestore, només afegir) — v2.1.0
+  // ══════════════════════════════════════════════
+  // Cada esdeveniment és un document NOU. Les regles de Firestore prohibeixen update/delete.
+  // Els errors del registre MAI bloquegen la devolució: només es mostren a l'overlay.
+
+  const REG = { cfg: null, runId: null, ok: 0, fail: 0, pending: [] };
+  // Valors per defecte (s'omplen quan hi hagi projecte Firebase). La pàgina normalment els passa a pending.
+  const REG_DEFAULT_CFG = { projectId: '', apiKey: '', collection: 'devolucions' };
+
+  function regInit(cfg, runId) {
+    if (!cfg || !cfg.projectId) cfg = REG_DEFAULT_CFG;
+    REG.cfg = (cfg && cfg.projectId && cfg.apiKey) ? cfg : null;
+    REG.runId = runId || ('us-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8));
+  }
+
+  function regRandomId() {
+    const c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let id = '';
+    for (let i = 0; i < 20; i++) id += c[Math.floor(Math.random() * c.length)];
+    return id;
+  }
+
+  function regFields(obj) {
+    const f = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === undefined || v === null || v === '') continue;
+      if (typeof v === 'number' && Number.isInteger(v)) f[k] = { integerValue: String(v) };
+      else f[k] = { stringValue: String(v) };
+    }
+    return f;
+  }
+
+  function regBuildEvent(tipus, extra = {}) {
+    const r = extra.motiu_codi != null ? String(extra.motiu_codi) : undefined;
+    const ev = Object.assign({
+      tipus,
+      run_id: REG.runId,
+      majorista: 'alliance',
+      origen: 'userscript',
+      user_agent: (navigator.userAgent || '').slice(0, 400),
+    }, extra);
+    if (r && !ev.motiu_text) ev.motiu_text = (typeof REASON_CODES !== 'undefined' && REASON_CODES[r]) || r;
+    if (ev.qty != null) ev.qty = parseInt(ev.qty, 10) || 0;
+    if (ev.cn != null) ev.cn = String(ev.cn).slice(0, 20);
+    if (ev.albara) ev.albara = String(ev.albara).slice(0, 200);
+    if (ev.detall) ev.detall = String(ev.detall).slice(0, 2000);
+    return ev;
+  }
+
+  function regRequestBody(ev, docId) {
+    const cfg = REG.cfg;
+    const coll = cfg.collection || 'devolucions';
+    return {
+      writes: [{
+        update: {
+          name: `projects/${cfg.projectId}/databases/(default)/documents/${coll}/${docId}`,
+          fields: regFields(ev),
+        },
+        currentDocument: { exists: false },
+        updateTransforms: [{ fieldPath: 'ts', setToServerValue: 'REQUEST_TIME' }],
+      }],
+    };
+  }
+
+  /** Desa un esdeveniment. Retorna una promesa que SEMPRE es resol ({ok, id|error}). */
+  function regLog(tipus, extra = {}) {
+    if (!REG.cfg) {
+      REG.fail++;
+      if (!REG.warnedNoCfg) {
+        REG.warnedNoCfg = true;
+        try { status('🗂 Registre: no configurat (falta projecte Firebase) — la devolució continua', 'warn'); } catch (e) {}
+      }
+      return Promise.resolve({ ok: false, error: 'no configurat' });
+    }
+    const ev = regBuildEvent(tipus, extra);
+    const docId = regRandomId();
+    const base = REG.cfg.baseUrl || 'https://firestore.googleapis.com';
+    const url = `${base}/v1/projects/${REG.cfg.projectId}/databases/(default)/documents:commit?key=${encodeURIComponent(REG.cfg.apiKey)}`;
+    const pr = new Promise(resolve => {
+      const done = (res) => {
+        if (res.ok) REG.ok++; else {
+          REG.fail++;
+          try { status(`🗂 Registre: error desant «${tipus}»${ev.cn ? ' CN ' + ev.cn : ''}: ${res.error}`, 'warn'); } catch (e) {}
+          log('Registre error', res.error);
+        }
+        resolve(res);
+      };
+      try {
+        GM_xmlhttpRequest({
+          method: 'POST',
+          url,
+          headers: { 'Content-Type': 'application/json' },
+          data: JSON.stringify(regRequestBody(ev, docId)),
+          timeout: 15000,
+          onload: (r) => {
+            if (r.status >= 200 && r.status < 300) done({ ok: true, id: docId });
+            else {
+              let msg = 'HTTP ' + r.status;
+              try { const j = JSON.parse(r.responseText); if (j.error && j.error.message) msg += ' ' + String(j.error.message).trim().slice(0, 200); } catch (e) {}
+              done({ ok: false, error: msg });
+            }
+          },
+          onerror: () => done({ ok: false, error: 'xarxa' }),
+          ontimeout: () => done({ ok: false, error: 'temps esgotat' }),
+        });
+      } catch (e) {
+        done({ ok: false, error: e.message || String(e) });
+      }
+    });
+    REG.pending.push(pr);
+    return pr;
+  }
+
+  async function regFlush(maxMs = 10000) {
+    const all = Promise.allSettled(REG.pending.slice());
+    await Promise.race([all, sleep(maxMs)]);
+  }
+
+  /** Intenta llegir el número d'albarà de la fila (scope Angular o text de la fila). */
+  function readAlbaraFromRow(checkbox) {
+    try {
+      const tr = checkbox.closest('tr');
+      if (!tr) return '';
+      try {
+        const ng = getAngular();
+        const sc = ng && ng.element(tr).scope();
+        const rl = sc && sc.returnLine;
+        if (rl && typeof rl === 'object') {
+          const keys = Object.keys(rl).filter(k => !k.startsWith('$'));
+          const k = keys.find(k => /albar|delivery|deliv|note|document|doc|invoice|factura/i.test(k) && rl[k] != null && typeof rl[k] !== 'object');
+          const dk = keys.find(k => /date|fecha/i.test(k) && rl[k] != null && typeof rl[k] !== 'object');
+          if (k) return String(rl[k]) + (dk ? ' (' + rl[dk] + ')' : '');
+        }
+      } catch (e) {}
+      const txt = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.replace(/\s+/g, ' ').trim()).filter(Boolean).join(' | ');
+      return txt.slice(0, 200);
+    } catch (e) { return ''; }
+  }
+
+  // ══════════════════════════════════════════════
   //  GM STORAGE — dades cross-domain
   // ══════════════════════════════════════════════
 
-  function storePending(products, wholesaler, options = {}) {
+  function storePending(products, wholesaler, options = {}, extra = {}) {
     GM_setValue('pending_return', JSON.stringify({
-      products, wholesaler, options, ts: Date.now()
+      products, wholesaler, options, ts: Date.now(),
+      run_id: extra.run_id || null, registre: extra.registre || null
     }));
     log(`Stored ${products.length} products for ${wholesaler} (options: ${JSON.stringify(options)})`);
   }
@@ -186,7 +329,7 @@
     ov.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">🔄</span>
-        <strong style="font-size:14px">Auto Devolucions v2.0.10</strong>
+        <strong style="font-size:14px">Auto Devolucions v2.1.0</strong>
         <span id="fa-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px;background:#3b82f6;color:white;font-weight:600">Processant...</span>
       </div>
       <div id="fa-log" style="max-height:220px;overflow-y:auto;font-size:12px;color:#94a3b8"></div>
@@ -325,6 +468,8 @@
 
     // ── 1. Navegar a la pàgina de sol·licitud ──
     if (!(await ensureProductsPage())) {
+      for (const p of products) regLog('error_afegir', { cn: p.cn, qty: p.qty, motiu_codi: p.reason, detall: "no s'ha pogut obrir 'Solicitar devolución parcial'" });
+      await regFlush(); regSummary();
       badge('Error', '#ef4444'); addCloseBtn(); return;
     }
     await sleep(1500);
@@ -347,14 +492,17 @@
           ok++;
           added.push(p);
           status(`CN ${p.cn} afegit ✓`, 'ok');
+          regLog('afegit_llista', { cn: p.cn, qty: p.qty, motiu_codi: p.reason, albara: p.albara });
         } else {
           fail++;
           status(`CN ${p.cn}: no s'ha pogut afegir`, 'error');
+          regLog('error_afegir', { cn: p.cn, qty: p.qty, motiu_codi: p.reason, albara: p.albara, detall: "no s'ha pogut afegir" });
         }
       } catch (e) {
         fail++;
         status(`CN ${p.cn}: ${e.message}`, 'error');
         log('Error:', e);
+        regLog('error_afegir', { cn: p.cn, qty: p.qty, motiu_codi: p.reason, albara: p.albara, detall: e.message });
       }
 
       if (i < products.length - 1) await sleep(CONFIG.ACTION_DELAY);
@@ -388,8 +536,16 @@
       guardSendButton(added);     // avís 2: en clicar "Enviar devolución"
     }
 
+    await regFlush();
+    regSummary();
     addCloseBtn();
     clearPending();
+  }
+
+  function regSummary() {
+    if (!REG.cfg) { status('🗂 Registre: NO s\'ha desat (registre no configurat)', 'warn'); return; }
+    if (REG.fail === 0) status(`🗂 Registre: ${REG.ok} esdeveniment(s) desats`, 'ok');
+    else status(`🗂 Registre: ${REG.ok} desats, ${REG.fail} amb error (la devolució no s'ha bloquejat)`, 'warn');
   }
 
   // ── Avisos de revisió de quantitat i motiu ──
@@ -431,7 +587,12 @@
       if (!btn) return;
       const ok = confirm('⚠ SEGONA REVISIÓ (2/2)\n\nHas revisat la QUANTITAT i el MOTIU que he seleccionat a cada línia?\n\n' + lines +
         '\n\nAccepta només si està tot revisat. Cancel·la per tornar-hi.');
-      if (!ok) { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); }
+      if (!ok) { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); return; }
+      for (const p of items) regLog('confirmat_enviar', { cn: p.cn, qty: p.qty, motiu_codi: p.reason, albara: p.albara });
+      Promise.allSettled(REG.pending.slice()).then(() => {
+        const failNow = REG.fail;
+        try { status(`🗂 Registre: confirmació d'enviament desada (${items.length} línia/es)` + (failNow ? ` · ${failNow} error(s) de registre en total` : ''), failNow ? 'warn' : 'ok'); } catch (e) {}
+      });
     }, true);
   }
 
@@ -753,6 +914,7 @@
       return true;
     }
 
+    try { product.albara = readAlbaraFromRow(checkbox); } catch (e) {}
     if (!checkbox.checked) {
       checkbox.click();
       log('Albarà checkbox clicked');
@@ -1012,8 +1174,8 @@
 
   function initFarmaciaPage() {
     // Anunciar presència — DOM attribute (funciona sempre, compartit entre sandbox i pàgina)
-    document.documentElement.setAttribute('data-farmacia-script', '2.0.10');
-    log('Script v2.0.10 active on farmacia-tools page');
+    document.documentElement.setAttribute('data-farmacia-script', '2.1.0');
+    log('Script v2.1.0 active on farmacia-tools page');
 
     // Fallback: unsafeWindow global (pot fallar en Chrome nou + Tampermonkey sandbox)
     try { unsafeWindow.__FARMACIA_DEVOLUCIONS_SCRIPT__ = true; } catch(e) {
@@ -1048,7 +1210,7 @@
       try { unsafeWindow.__FARMACIA_RETURN_HANDLED__ = true; } catch(e) {}
 
       // Guardar dades a GM storage (sobreviu redirections ADFS)
-      storePending(detail.products, detail.wholesaler, detail.options || {});
+      storePending(detail.products, detail.wholesaler, detail.options || {}, { run_id: detail.run_id, registre: detail.registre });
 
       // Obrir el portal en una nova pestanya
       const urls = {
@@ -1164,6 +1326,7 @@
       }
       try {
         await sleep(3000);
+        regInit(data.registre, data.run_id);
         await allianceRun(data.products, data.options || {});
       } catch (e) {
         log('Error during allianceRun:', e);

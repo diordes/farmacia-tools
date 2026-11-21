@@ -382,6 +382,20 @@
       .wholesaler-grid { grid-template-columns: 1fr; }
       .manual-actions { flex-direction: column; }
     }
+    /* Registre */
+    .registre-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+    .registre-section h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 8px; display:flex; align-items:center; gap:8px; }
+    .registre-note { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 10px; }
+    .registre-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }
+    .registre-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .registre-table th, .registre-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .registre-table th { font-weight: 700; color: var(--text-secondary); position: sticky; top: 0; background: var(--surface); }
+    .reg-tipus { font-weight: 600; padding: 1px 6px; border-radius: 6px; font-size: 0.72rem; }
+    .reg-enviat_al_portal { background:#dbeafe; color:#1e40af; }
+    .reg-afegit_llista { background:#dcfce7; color:#166534; }
+    .reg-error_afegir { background:#fee2e2; color:#991b1b; }
+    .reg-confirmat_enviar { background:#fef3c7; color:#92400e; }
+    .reg-prova { background:#e5e7eb; color:#374151; }
   </style>
 </head>
 <body>
@@ -491,6 +505,20 @@
               🔗 Obrir Alliance (manual)
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Registre (només lectura) -->
+      <div class="registre-section">
+        <h3>🗂 Registre <span id="registreStatus" class="status-badge status-missing" style="font-size:0.7rem">Carregant...</span>
+          <button class="btn btn-sm btn-outline" style="margin-left:auto" onclick="window.Registre && window.Registre.refresh()">↻ Actualitzar</button>
+        </h3>
+        <div class="registre-note">Cada devolució queda registrada automàticament i <b>no es pot modificar ni esborrar</b>. Últims 100 esdeveniments.</div>
+        <div class="registre-wrap">
+          <table class="registre-table">
+            <thead><tr><th>Data i hora</th><th>Esdeveniment</th><th>CN</th><th>Quant.</th><th>Motiu</th><th>Albarà</th><th>Origen</th><th>Execució</th></tr></thead>
+            <tbody id="registreBody"><tr><td colspan="8">—</td></tr></tbody>
+          </table>
         </div>
       </div>
 
@@ -641,12 +669,30 @@
         skipQtyReason: false
       };
 
+      const run_id = 'run-' + new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14) + '-' + Math.random().toString(36).slice(2, 8);
+      const registre = window.Registre ? window.Registre.config() : null;
+
       window.__FARMACIA_RETURN_HANDLED__ = false;
+      document.documentElement.removeAttribute('data-farmacia-return-handled');
       window.dispatchEvent(new CustomEvent('farmacia-start-return', {
-        detail: { products: portalProducts, wholesaler, options }
+        detail: { products: portalProducts, wholesaler, options, run_id, registre }
       }));
 
-      if (window.__FARMACIA_RETURN_HANDLED__) {
+      const handled = window.__FARMACIA_RETURN_HANDLED__ ||
+        document.documentElement.getAttribute('data-farmacia-return-handled') === 'true';
+
+      // Registre: un document per producte (no bloqueja res)
+      if (handled && wholesaler === 'alliance') {
+        if (window.Registre) {
+          window.Registre.logSent(run_id, portalProducts).then(r => {
+            if (!r.ok) showToast('⚠ Registre: ' + r.error + ' (la devolució continua)');
+          });
+        } else {
+          showToast('⚠ Registre no disponible (la devolució continua)');
+        }
+      }
+
+      if (handled) {
         showToast('🚀 Portal obert — l\'script processarà les devolucions automàticament');
       } else {
         // L'script v2 no ha respost — avisar
@@ -760,6 +806,91 @@
     // Load saved state
     loadState();
     renderList();
+  </script>
+  <script type="module">
+    // ── Registre de devolucions (Firestore, només afegir/llegir) ──
+    const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    const REASONS = { '01': 'No interessa', '02': 'Servit per error', '03': 'Defectuós', '04': 'Caducitat', '10': 'Error de preu', '99': 'Altres' };
+    const TIPUS = { enviat_al_portal: 'Enviat al portal', afegit_llista: 'Afegit a la llista', error_afegir: 'Error en afegir', confirmat_enviar: 'Confirmat enviar', prova: 'Prova' };
+    let cfg = null, db = null, fs = null, initErr = null;
+
+    const statusEl = document.getElementById('registreStatus');
+    const setStatus = (txt, ok) => { statusEl.textContent = txt; statusEl.className = 'status-badge ' + (ok ? 'status-ok' : 'status-missing'); };
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    async function init() {
+      try {
+        const r = await fetch('registre-config.json?_=' + Date.now(), { cache: 'no-store' });
+        cfg = await r.json();
+        const qp = new URLSearchParams(location.search).get('registreEmulator');
+        if (qp) { cfg.emulatorHost = qp; if (!cfg.projectId) cfg.projectId = 'demo-farmacia'; if (!cfg.apiKey) cfg.apiKey = 'fake'; }
+        if (!cfg.projectId || !cfg.apiKey) { initErr = 'no configurat'; setStatus('⚠ No configurat', false); return; }
+        const app = await import(SDK + 'firebase-app.js');
+        fs = await import(SDK + 'firebase-firestore.js');
+        const fbApp = app.initializeApp({ apiKey: cfg.apiKey, projectId: cfg.projectId, authDomain: cfg.projectId + '.firebaseapp.com' });
+        db = fs.getFirestore(fbApp);
+        if (cfg.emulatorHost) { const [h, p] = cfg.emulatorHost.split(':'); fs.connectFirestoreEmulator(db, h, parseInt(p, 10)); }
+        setStatus('✓ Actiu', true);
+        refresh();
+      } catch (e) {
+        initErr = e.message || String(e);
+        setStatus('⚠ Error', false);
+        console.error('[Registre]', e);
+      }
+    }
+
+    function base(run_id) {
+      return { ts: fs.serverTimestamp(), run_id, majorista: 'alliance', origen: 'pagina', user_agent: (navigator.userAgent || '').slice(0, 400) };
+    }
+
+    async function logSent(run_id, products) {
+      if (!db) return { ok: false, error: initErr || 'no inicialitzat' };
+      try {
+        const coll = fs.collection(db, cfg.collection || 'devolucions');
+        const batch = fs.writeBatch(db);
+        for (const p of products) {
+          const d = Object.assign(base(run_id), {
+            tipus: 'enviat_al_portal', cn: String(p.cn).slice(0, 20), qty: parseInt(p.qty, 10) || 0,
+            motiu_codi: String(p.reason || ''), motiu_text: REASONS[p.reason] || String(p.reason || ''),
+            n_productes: products.length
+          });
+          batch.set(fs.doc(coll), d);
+        }
+        await batch.commit();
+        setTimeout(refresh, 500);
+        return { ok: true };
+      } catch (e) {
+        console.error('[Registre] logSent', e);
+        return { ok: false, error: e.code || e.message || String(e) };
+      }
+    }
+
+    const fmt = new Intl.DateTimeFormat('ca-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    async function refresh() {
+      const body = document.getElementById('registreBody');
+      if (!db) { body.innerHTML = `<tr><td colspan="8">Registre ${esc(initErr || 'no disponible')}</td></tr>`; return; }
+      try {
+        const q = fs.query(fs.collection(db, cfg.collection || 'devolucions'), fs.orderBy('ts', 'desc'), fs.limit(100));
+        const snap = await fs.getDocs(q);
+        if (snap.empty) { body.innerHTML = '<tr><td colspan="8">Encara no hi ha cap esdeveniment.</td></tr>'; return; }
+        body.innerHTML = snap.docs.map(doc => {
+          const d = doc.data();
+          const ts = d.ts && d.ts.toDate ? fmt.format(d.ts.toDate()) : '';
+          const motiu = d.motiu_codi ? `${esc(d.motiu_codi)} ${esc(d.motiu_text || REASONS[d.motiu_codi] || '')}` : '';
+          return `<tr title="${esc(d.detall || '')}"><td>${ts}</td><td><span class="reg-tipus reg-${esc(d.tipus)}">${esc(TIPUS[d.tipus] || d.tipus)}</span></td>` +
+            `<td>${esc(d.cn)}</td><td>${esc(d.qty)}</td><td>${motiu}</td><td>${esc(d.albara)}</td><td>${esc(d.origen)}</td><td style="font-family:monospace">${esc(String(d.run_id || '').slice(-10))}</td></tr>`;
+        }).join('');
+      } catch (e) {
+        body.innerHTML = `<tr><td colspan="8">Error llegint el registre: ${esc(e.code || e.message)}</td></tr>`;
+      }
+    }
+
+    window.Registre = {
+      config: () => (cfg && cfg.projectId ? { projectId: cfg.projectId, apiKey: cfg.apiKey, collection: cfg.collection || 'devolucions', baseUrl: cfg.emulatorHost ? 'http://' + cfg.emulatorHost : undefined } : null),
+      logSent, refresh
+    };
+    init();
   </script>
 </body>
 </html>
