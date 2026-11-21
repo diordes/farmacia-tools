@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Farmàcia Central BCN — Auto Devolucions
 // @namespace    https://diordes.github.io/farmacia-tools
-// @version      2.0.6
+// @version      2.0.7
 // @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare)
 // @author       Farmàcia Central BCN
 // @match        https://my.alliance-healthcare.es/*
@@ -38,7 +38,7 @@
   // ══════════════════════════════════════════════
 
   function log(msg, ...args) {
-    console.log(`[AutoDevolucions v2.0.6] ${msg}`, ...args);
+    console.log(`[AutoDevolucions v2.0.7] ${msg}`, ...args);
   }
 
   function sleep(ms) {
@@ -186,7 +186,7 @@
     ov.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">🔄</span>
-        <strong style="font-size:14px">Auto Devolucions v2.0.6</strong>
+        <strong style="font-size:14px">Auto Devolucions v2.0.7</strong>
         <span id="fa-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px;background:#3b82f6;color:white;font-weight:600">Processant...</span>
       </div>
       <div id="fa-log" style="max-height:220px;overflow-y:auto;font-size:12px;color:#94a3b8"></div>
@@ -261,6 +261,62 @@
   //  ALLIANCE HEALTHCARE — AUTOMATITZACIÓ
   // ══════════════════════════════════════════════
 
+  // ── Assegurar que som a #/requests/products i que s'hi queda (el portal de vegades torna a #/) ──
+  const onProducts = () => location.hash.includes('/requests/products');
+
+  async function hashStable(ms) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) { if (!onProducts()) return false; await sleep(250); }
+    return true;
+  }
+
+  function findSolicitarBtn() {
+    const all = [...document.querySelectorAll('a, button, div.btn, span, li')]
+      .filter(el => isVisible(el) && el.textContent.includes('Solicitar devolución parcial'));
+    const inner = all.find(el => !all.some(o => o !== el && el.contains(o)));
+    return inner ? (inner.closest('a, button, [ng-click], [ui-sref]') || inner) : null;
+  }
+
+  async function ensureProductsPage() {
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      await waitLoading();
+      if (onProducts()) {
+        if (await hashStable(3000)) {
+          status('Pàgina de sol·licitud oberta', 'ok');
+          await waitLoading();
+          return true;
+        }
+        status(`🔧 El portal ha tornat a ${location.hash || '(buit)'} — ho torno a provar (${attempt}/4)`, 'warn');
+        await sleep(2000);
+        await waitLoading();
+        continue;
+      }
+      if (attempt === 4) {
+        // Últim recurs: canviar el hash directament (només navegació)
+        status('🔧 Provo d\'obrir #/requests/products directament', 'warn');
+        location.hash = '#/requests/products';
+        await sleep(4000);
+        await waitLoading();
+        if (onProducts() && await hashStable(3000)) { status('Pàgina de sol·licitud oberta', 'ok'); return true; }
+        break;
+      }
+      status(`Navegant a "Solicitar devolución parcial"... (${attempt}/4)`, 'info');
+      const solBtn = await waitForEl(findSolicitarBtn, CONFIG.MAX_WAIT);
+      if (!solBtn) {
+        status('No s\'ha trobat "Solicitar devolución parcial"', 'warn');
+        debugState('solicitar');
+        if (location.hash && location.hash !== '#/') { location.hash = '#/'; await sleep(3000); }
+        continue;
+      }
+      solBtn.click();
+      await waitForEl(() => onProducts() ? document.body : null, 15000);
+      await sleep(attempt === 1 ? 2000 : 1000);
+    }
+    status('No he pogut quedar-me a la pàgina "Solicitar devolución parcial"', 'error');
+    debugState('navegació');
+    return false;
+  }
+
   async function allianceRun(products, options) {
     createOverlay();
     status(`Iniciant devolució de ${products.length} producte(s)...`);
@@ -268,46 +324,10 @@
     await dismissCookies();
 
     // ── 1. Navegar a la pàgina de sol·licitud ──
-    let hash = window.location.hash;
-    if (hash.includes('/requests/products')) {
-      status('Ja som a la pàgina de productes', 'ok');
-      await sleep(2000);
-    } else {
-      if (hash && hash !== '#/' && hash !== '#') {
-        status(`Hash inesperat (${hash}) — torno a l'inici de Devoluciones`, 'warn');
-        window.location.hash = '#/';
-        await sleep(3000);
-        await waitLoading();
-      }
-      status('Navegant a "Solicitar devolución parcial"...', 'info');
-
-      // Buscar el botó/link "Solicitar devolución parcial" — l'element MÉS INTERIOR
-      const solBtn = await waitForEl(() => {
-        const all = [...document.querySelectorAll('a, button, div.btn, span, li')]
-          .filter(el => isVisible(el) &&
-                        el.textContent.includes('Solicitar devolución parcial'));
-        // el més interior (que no contingui cap altre candidat)
-        const inner = all.find(el => !all.some(o => o !== el && el.contains(o)));
-        return inner ? (inner.closest('a, button, [ng-click], [ui-sref]') || inner) : null;
-      }, CONFIG.MAX_WAIT);
-
-      if (!solBtn) {
-        status('No s\'ha trobat "Solicitar devolución parcial"', 'error');
-        debugState('solicitar');
-        badge('Error', '#ef4444'); addCloseBtn(); return;
-      }
-      solBtn.click();
-      // comprovar que realment hem canviat de pàgina
-      const okNav = await waitForEl(
-        () => location.hash.includes('/requests/products') ? document.body : null, 15000);
-      if (!okNav) {
-        status('El clic a "Solicitar devolución parcial" no ha portat a #/requests/products', 'error');
-        debugState('navegació');
-        badge('Error', '#ef4444'); addCloseBtn(); return;
-      }
-      status('Pàgina de sol·licitud oberta', 'ok');
-      await sleep(CONFIG.PAGE_LOAD_DELAY);
+    if (!(await ensureProductsPage())) {
+      badge('Error', '#ef4444'); addCloseBtn(); return;
     }
+    await sleep(1500);
 
     await dismissCookies();
     await waitLoading();
@@ -461,11 +481,9 @@
 
     // Cas 3: modal tancat → clicar "Buscar por producto"
     // 3a. Ens assegurem que som a la pàgina de productes i que no hi ha "Cargando"
-    if (!location.hash.includes('/requests/products')) {
-      status(`Hash inesperat (${location.hash || 'buit'}) — espero #/requests/products`, 'warn');
-      const okHash = await waitForEl(
-        () => location.hash.includes('/requests/products') ? document.body : null, 15000);
-      if (!okHash) {
+    if (!onProducts()) {
+      status(`Hash inesperat (${location.hash || 'buit'}) — torno a obrir la pàgina de sol·licitud`, 'warn');
+      if (!(await ensureProductsPage())) {
         status('No som a la pàgina "Buscar productos" (#/requests/products)', 'error');
         debugState('hash');
         return null;
@@ -931,8 +949,8 @@
 
   function initFarmaciaPage() {
     // Anunciar presència — DOM attribute (funciona sempre, compartit entre sandbox i pàgina)
-    document.documentElement.setAttribute('data-farmacia-script', '2.0.6');
-    log('Script v2.0.6 active on farmacia-tools page');
+    document.documentElement.setAttribute('data-farmacia-script', '2.0.7');
+    log('Script v2.0.7 active on farmacia-tools page');
 
     // Fallback: unsafeWindow global (pot fallar en Chrome nou + Tampermonkey sandbox)
     try { unsafeWindow.__FARMACIA_DEVOLUCIONS_SCRIPT__ = true; } catch(e) {
