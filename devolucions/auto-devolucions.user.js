@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Farmàcia Central BCN — Auto Devolucions
 // @namespace    https://diordes.github.io/farmacia-tools
-// @version      2.0.8
+// @version      2.0.9
 // @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare)
 // @author       Farmàcia Central BCN
 // @match        https://my.alliance-healthcare.es/*
@@ -38,7 +38,7 @@
   // ══════════════════════════════════════════════
 
   function log(msg, ...args) {
-    console.log(`[AutoDevolucions v2.0.8] ${msg}`, ...args);
+    console.log(`[AutoDevolucions v2.0.9] ${msg}`, ...args);
   }
 
   function sleep(ms) {
@@ -186,7 +186,7 @@
     ov.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">🔄</span>
-        <strong style="font-size:14px">Auto Devolucions v2.0.8</strong>
+        <strong style="font-size:14px">Auto Devolucions v2.0.9</strong>
         <span id="fa-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px;background:#3b82f6;color:white;font-weight:600">Processant...</span>
       </div>
       <div id="fa-log" style="max-height:220px;overflow-y:auto;font-size:12px;color:#94a3b8"></div>
@@ -364,7 +364,7 @@
 
     // ── 3. Ajustar quantitats i motius per línia ──
     if (added.length > 0) {
-      const opts = options || {};
+      const opts = Object.assign({}, options || {}, { skipQtyReason: true }); // SEMPRE manual
       if (opts.skipQtyReason) {
         status('⏸ Revisa quantitat i motiu de cada línia manualment', 'wait');
       } else {
@@ -383,8 +383,57 @@
       status(`${ok} afegit(s), ${fail} error(s). Revisa la llista.`, 'warn');
     }
 
+    if (added.length > 0) {
+      showReviewWarning(added);   // avís 1: en acabar
+      guardSendButton(added);     // avís 2: en clicar "Enviar devolución"
+    }
+
     addCloseBtn();
     clearPending();
+  }
+
+  // ── Avisos de revisió de quantitat i motiu ──
+
+  function reviewListHtml(items) {
+    return items.map(p => {
+      const r = String(p.reason || '');
+      const txt = (typeof REASON_CODES !== 'undefined' && REASON_CODES[r]) ? REASON_CODES[r] : r;
+      return `<li>CN <b>${p.cn}</b>: quantitat <b>${p.qty}</b> · motiu <b>${txt || '—'}</b></li>`;
+    }).join('');
+  }
+
+  function showReviewWarning(items) {
+    status(`<div style="background:#fee2e2;color:#991b1b;border:2px solid #dc2626;border-radius:8px;padding:8px;margin:4px 0">
+      <b>⚠ ATENCIÓ: QUANTITAT I MOTIU NO S'HAN OMPLERT.</b><br>
+      Omple'ls a mà a cada línia del portal i revisa'ls abans d'enviar:<ul style="margin:4px 0 0 16px;padding:0">${reviewListHtml(items)}</ul></div>`, 'warn');
+    try {
+      document.querySelectorAll('td[headers=returnedQuantity] input, select[name^="reason-"]').forEach(el => {
+        el.style.outline = '3px solid #dc2626'; el.style.background = '#fef2f2';
+      });
+    } catch (e) {}
+    const lines = items.map(p => {
+      const r = String(p.reason || '');
+      return `• CN ${p.cn}: quantitat ${p.qty} · motiu ${REASON_CODES[r] || r}`;
+    }).join('\n');
+    setTimeout(() => alert('⚠ ATENCIÓ (1/2)\n\nLa QUANTITAT i el MOTIU NO s\'han omplert automàticament.\n' +
+      'Omple\'ls i revisa\'ls a mà a cada línia abans d\'enviar la devolució:\n\n' + lines), 300);
+  }
+
+  function guardSendButton(items) {
+    if (document.documentElement.getAttribute('data-fa-sendguard')) return;
+    document.documentElement.setAttribute('data-fa-sendguard', '1');
+    const lines = items.map(p => {
+      const r = String(p.reason || '');
+      return `• CN ${p.cn}: quantitat ${p.qty} · motiu ${REASON_CODES[r] || r}`;
+    }).join('\n');
+    document.addEventListener('click', (ev) => {
+      const btn = ev.target && ev.target.closest &&
+        ev.target.closest('button[ng-click="openConfirmReturnDialog()"], [ng-click="openConfirmReturnDialog()"]');
+      if (!btn) return;
+      const ok = confirm('⚠ SEGONA REVISIÓ (2/2)\n\nHas comprovat la QUANTITAT i el MOTIU de CADA línia?\n\n' + lines +
+        '\n\nAccepta només si està tot revisat. Cancel·la per tornar-hi.');
+      if (!ok) { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); }
+    }, true);
   }
 
   // ── Trobar el primer input visible dins un modal ──
@@ -964,8 +1013,8 @@
 
   function initFarmaciaPage() {
     // Anunciar presència — DOM attribute (funciona sempre, compartit entre sandbox i pàgina)
-    document.documentElement.setAttribute('data-farmacia-script', '2.0.8');
-    log('Script v2.0.8 active on farmacia-tools page');
+    document.documentElement.setAttribute('data-farmacia-script', '2.0.9');
+    log('Script v2.0.9 active on farmacia-tools page');
 
     // Fallback: unsafeWindow global (pot fallar en Chrome nou + Tampermonkey sandbox)
     try { unsafeWindow.__FARMACIA_DEVOLUCIONS_SCRIPT__ = true; } catch(e) {

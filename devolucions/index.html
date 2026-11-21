@@ -432,8 +432,8 @@
             Selecció manual d'albarà
           </label>
           <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;cursor:pointer">
-            <input type="checkbox" id="chkSkipQtyReason" checked>
-            No omplir quantitat/motiu (revisió manual)
+            <input type="checkbox" id="chkSkipQtyReason" checked disabled>
+            Quantitat i motiu s'omplen sempre a mà al portal (sortirà un avís 2 vegades)
           </label>
         </div>
       </div>
@@ -638,7 +638,7 @@
       // Opcions de control
       const options = {
         manualAlbara: document.getElementById('chkManualAlbara').checked,
-        skipQtyReason: document.getElementById('chkSkipQtyReason').checked
+        skipQtyReason: true
       };
 
       window.__FARMACIA_RETURN_HANDLED__ = false;
