@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Farmàcia Central BCN — Auto Devolucions
 // @namespace    https://diordes.github.io/farmacia-tools
-// @version      2.1.0
+// @version      2.1.1
 // @description  Automatitza les devolucions als portals dels majoristes (Alliance Healthcare)
 // @author       Farmàcia Central BCN
 // @match        https://my.alliance-healthcare.es/*
@@ -40,7 +40,7 @@
   // ══════════════════════════════════════════════
 
   function log(msg, ...args) {
-    console.log(`[AutoDevolucions v2.1.0] ${msg}`, ...args);
+    console.log(`[AutoDevolucions v2.1.1] ${msg}`, ...args);
   }
 
   function sleep(ms) {
@@ -136,11 +136,27 @@
       window.HTMLSelectElement.prototype, 'value'
     ).set;
     setter.call(select, value);
+    select.dispatchEvent(new Event('input', { bubbles: true }));
     select.dispatchEvent(new Event('change', { bubbles: true }));
+    select.dispatchEvent(new Event('blur', { bubbles: true }));
+    // Fallback Angular: assegurar que el model (i la validació) sap que hi ha motiu
+    try {
+      const ng = getAngular();
+      if (ng) {
+        const el = ng.element(select);
+        const ctrl = el.controller('ngModel');
+        const scope = el.scope();
+        const apply = () => {
+          el.triggerHandler('change');
+          if (ctrl) { ctrl.$setDirty && ctrl.$setDirty(); ctrl.$setTouched && ctrl.$setTouched(); ctrl.$validate && ctrl.$validate(); }
+        };
+        if (scope && scope.$root && !scope.$root.$$phase) scope.$apply(apply); else apply();
+      }
+    } catch (e) { log('setSelectValue Angular fallback error', e); }
   }
 
   // ══════════════════════════════════════════════
-  //  REGISTRE (Firestore, només afegir) — v2.1.0
+  //  REGISTRE (Firestore, només afegir) — v2.1.1
   // ══════════════════════════════════════════════
   // Cada esdeveniment és un document NOU. Les regles de Firestore prohibeixen update/delete.
   // Els errors del registre MAI bloquegen la devolució: només es mostren a l'overlay.
@@ -329,7 +345,7 @@
     ov.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:18px">🔄</span>
-        <strong style="font-size:14px">Auto Devolucions v2.1.0</strong>
+        <strong style="font-size:14px">Auto Devolucions v2.1.1</strong>
         <span id="fa-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px;background:#3b82f6;color:white;font-weight:600">Processant...</span>
       </div>
       <div id="fa-log" style="max-height:220px;overflow-y:auto;font-size:12px;color:#94a3b8"></div>
@@ -424,7 +440,7 @@
     for (let attempt = 1; attempt <= 4; attempt++) {
       await waitLoading();
       if (onProducts()) {
-        if (await hashStable(3000)) {
+        if (await hashStable(5000)) {
           status('Pàgina de sol·licitud oberta', 'ok');
           await waitLoading();
           return true;
@@ -564,7 +580,7 @@
       He seleccionat això a cada línia (comprova-ho abans d'enviar):<ul style="margin:4px 0 0 16px;padding:0">${reviewListHtml(items)}</ul></div>`, 'warn');
     try {
       document.querySelectorAll('td[headers=returnedQuantity] input, select[name^="reason-"]').forEach(el => {
-        el.style.outline = '3px solid #dc2626'; el.style.background = '#fef2f2';
+        el.style.outline = '3px solid #f59e0b'; el.style.outlineOffset = '1px';
       });
     } catch (e) {}
     const lines = items.map(p => {
@@ -691,7 +707,7 @@
     // Cas 3: modal tancat → clicar "Buscar por producto"
     // 3a. Ens assegurem que som a la pàgina de productes i que no hi ha "Cargando"
     if (!onProducts()) {
-      status(`Hash inesperat (${location.hash || 'buit'}) — torno a obrir la pàgina de sol·licitud`, 'warn');
+      status('Reobrint la pàgina de sol·licitud (el portal l\'ha tancat sol)', 'info');
       if (!(await ensureProductsPage())) {
         status('No som a la pàgina "Buscar productos" (#/requests/products)', 'error');
         debugState('hash');
@@ -1174,8 +1190,8 @@
 
   function initFarmaciaPage() {
     // Anunciar presència — DOM attribute (funciona sempre, compartit entre sandbox i pàgina)
-    document.documentElement.setAttribute('data-farmacia-script', '2.1.0');
-    log('Script v2.1.0 active on farmacia-tools page');
+    document.documentElement.setAttribute('data-farmacia-script', '2.1.1');
+    log('Script v2.1.1 active on farmacia-tools page');
 
     // Fallback: unsafeWindow global (pot fallar en Chrome nou + Tampermonkey sandbox)
     try { unsafeWindow.__FARMACIA_DEVOLUCIONS_SCRIPT__ = true; } catch(e) {
