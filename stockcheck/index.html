@@ -400,6 +400,19 @@ input[type="file"] { display: none; }
   font-size: .9rem; flex-shrink: 0;
 }
 .recent-del:hover { background: var(--red-bg); color: var(--red); }
+
+.zones-detail { font-size: .75rem; color: var(--fg-muted); margin-top: 2px; line-height: 1.35; }
+.diff-badge.partial { background: var(--bg-input); color: var(--fg-mid); }
+.partial-banner {
+  font-size: .8rem; color: var(--fg-mid); background: var(--amber-bg);
+  border-radius: var(--r-sm); padding: 8px 12px; margin: 0 0 12px; line-height: 1.4;
+}
+.adjust-note {
+  margin-top: 12px; font-size: .85rem; color: var(--fg-mid); line-height: 1.45;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 14px 16px;
+}
+.adjust-note p { margin: 0 0 10px; }
 </style>
 </head>
 <body>
@@ -459,31 +472,6 @@ input[type="file"] { display: none; }
     <div id="adjust-area"></div>
   </section>
 
-  <!-- Adjust password modal -->
-  <div class="adjust-modal-overlay" id="adjust-modal" hidden onclick="if(event.target===this)closeAdjustModal()">
-    <div class="adjust-modal">
-      <div style="font-weight:600;font-size:1rem;margin-bottom:12px">Aplicar correccions a Farmatic</div>
-      <div class="adjust-warning">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="flex-shrink:0;color:var(--amber)">
-          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        <span>Això modificarà directament el stock a la base de dades de Farmatic. Farmatic no registrarà moviment d'ajust.</span>
-      </div>
-      <div id="adjust-summary" style="font-size:.85rem;color:var(--fg-mid);margin-bottom:12px"></div>
-      <input class="input-field" id="adjust-pwd" type="password" placeholder="Contrasenya" autocomplete="off" style="margin-bottom:12px">
-      <div id="adjust-progress" hidden style="margin-bottom:12px">
-        <div style="background:var(--bg-input);border-radius:6px;height:6px;overflow:hidden">
-          <div id="adjust-bar" style="background:var(--accent);height:100%;width:0%;transition:width .3s"></div>
-        </div>
-        <div id="adjust-status" style="font-size:.78rem;color:var(--fg-muted);margin-top:4px;text-align:center"></div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-outline" style="flex:1" onclick="closeAdjustModal()">Cancel·lar</button>
-        <button class="btn btn-primary" style="flex:1;background:var(--red)" id="btn-apply-adjust" onclick="applyAdjustments()">Aplicar</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Hidden file input for CSV import -->
   <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.tsv" hidden>
   <div class="card" id="mapping-card" hidden style="position:fixed;bottom:60px;left:16px;right:16px;z-index:45">
@@ -527,12 +515,14 @@ input[type="file"] { display: none; }
 
 /* ═══════════ STATE ═══════════ */
 let catalog = {};      // cn → { cn, name, stock, ean }
-let counts  = {};      // cn → { cn, name, counted, zone, ts }
+let counts  = {};      // `${cn}|${zone}` → { cn, name, counted, zone, farmatic, ts }
 let zones   = ['General'];
 let curZone = 'General';
 let curProduct = null;    // { cn, name, stock }
+let curEditZone = null;   // zone being edited, if any
 let activeTab  = 'scan';
 let filter = 'all';      // 'all'|'diff'|'deficit'|'surplus'|'ok'
+let zoneFilter = 'all';  // 'all' or a zone name (partial view)
 let importRows = null;
 let importHeaders = null;
 let mapping = { cn:-1, name:-1, stock:-1, ean:-1 };
@@ -552,6 +542,31 @@ function save(){
     localStorage.setItem('sc_zone',    curZone);
   } catch(e){}
 }
+function countKey(cn, zone){
+  return String(cn) + '|' + String(zone);
+}
+function migrateCounts(raw){
+  if(!raw || typeof raw !== 'object') return {};
+  const migrated = {};
+  for(const [k, v] of Object.entries(raw)){
+    if(!v || typeof v !== 'object') continue;
+    const cn = (v.cn != null && String(v.cn) !== '') ? String(v.cn) : String(k).split('|')[0];
+    const zone = (v.zone != null && String(v.zone) !== '') ? String(v.zone) : 'General';
+    const key = countKey(cn, zone);
+    const entry = Object.assign({}, v, { cn: cn, zone: zone });
+    if(migrated[key]){
+      migrated[key].counted = (Number(migrated[key].counted) || 0) + (Number(entry.counted) || 0);
+      if(new Date(entry.ts || 0) > new Date(migrated[key].ts || 0)){
+        migrated[key].ts = entry.ts;
+        if(entry.name) migrated[key].name = entry.name;
+        if(entry.farmatic !== undefined) migrated[key].farmatic = entry.farmatic;
+      }
+    } else {
+      migrated[key] = entry;
+    }
+  }
+  return migrated;
+}
 function load(){
   try {
     const c = localStorage.getItem('sc_catalog');
@@ -559,7 +574,10 @@ function load(){
     const z = localStorage.getItem('sc_zones');
     const zn = localStorage.getItem('sc_zone');
     if(c) catalog = JSON.parse(c);
-    if(n) counts  = JSON.parse(n);
+    if(n){
+      const parsed = JSON.parse(n);
+      counts = migrateCounts(parsed);
+    }
     if(z) zones   = JSON.parse(z);
     if(zn) curZone = zn;
     if(!zones.length) zones = ['General'];
@@ -791,16 +809,76 @@ function lookup(code){
 }
 
 /* ═══════════ COUNTING ═══════════ */
-function getDiffs(){
-  const arr = Object.values(counts).map(c => {
-    const prod = catalog[c.cn] || {};
-    const farmatic = apiMode ? (c.farmatic ?? prod.stock ?? 0) : (prod.stock ?? c.farmatic ?? 0);
-    const diff = c.counted - farmatic;
-    return { ...c, farmatic, diff };
+/* === CORE LOGIC START === */
+function resolveFarmatic(cn, entries){
+  const prod = catalog[cn] || {};
+  const latest = (entries || []).slice().sort((a,b) => new Date(b.ts||0) - new Date(a.ts||0))[0];
+  if(apiMode) return latest?.farmatic ?? prod.stock ?? 0;
+  return prod.stock ?? latest?.farmatic ?? 0;
+}
+function formatZonesDetail(entries){
+  return (entries || []).slice()
+    .sort((a,b) => String(a.zone).localeCompare(String(b.zone), 'ca'))
+    .map(e => e.zone + ' ' + e.counted)
+    .join(' · ');
+}
+function entriesForCn(cn){
+  return Object.values(counts).filter(c => String(c.cn) === String(cn));
+}
+function getGroupedDiffs(){
+  const byCn = {};
+  for(const c of Object.values(counts)){
+    const cn = String(c.cn);
+    if(!byCn[cn]) byCn[cn] = [];
+    byCn[cn].push(c);
+  }
+  const arr = Object.keys(byCn).map(cn => {
+    const list = byCn[cn];
+    const counted = list.reduce((s,e) => s + (Number(e.counted)||0), 0);
+    const farmatic = resolveFarmatic(cn, list);
+    const latest = list.slice().sort((a,b) => new Date(b.ts||0) - new Date(a.ts||0))[0];
+    return {
+      cn,
+      name: latest.name || catalog[cn]?.name || cn,
+      counted,
+      farmatic,
+      diff: counted - farmatic,
+      zones: list,
+      zonesDetail: formatZonesDetail(list),
+      ts: latest.ts,
+      partial: false
+    };
   });
   arr.sort((a,b) => Math.abs(b.diff) - Math.abs(a.diff));
   return arr;
 }
+function getZoneDiffs(zone){
+  return Object.values(counts)
+    .filter(c => c.zone === zone)
+    .map(c => {
+      const siblings = entriesForCn(c.cn);
+      const farmatic = resolveFarmatic(c.cn, siblings);
+      const totalCounted = siblings.reduce((s,e) => s + (Number(e.counted)||0), 0);
+      return {
+        cn: c.cn,
+        name: c.name,
+        counted: c.counted,
+        farmatic,
+        diff: c.counted - farmatic,
+        zone: c.zone,
+        zonesDetail: c.zone + ' ' + c.counted,
+        partial: true,
+        totalCounted,
+        ts: c.ts
+      };
+    })
+    .sort((a,b) => Math.abs(b.diff) - Math.abs(a.diff));
+}
+function getDiffs(){
+  if(zoneFilter && zoneFilter !== 'all') return getZoneDiffs(zoneFilter);
+  return getGroupedDiffs();
+}
+/* === CORE LOGIC END === */
 
 /* ═══════════ CAMERA ═══════════ */
 window.openCamera = function(){
@@ -851,7 +929,8 @@ async function processScan(code){
     return;
   }
 
-  const existing = counts[prod.cn];
+  const key = countKey(prod.cn, curZone);
+  const existing = counts[key];
   if(existing){
     const msSinceLast = Date.now() - new Date(existing.ts).getTime();
     const TWO_HOURS = 2 * 60 * 60 * 1000;
@@ -860,11 +939,12 @@ async function processScan(code){
       existing.ts = new Date().toISOString();
       if(apiMode && prod.stock !== undefined) existing.farmatic = prod.stock;
       save();
-      const diff = existing.counted - (existing.farmatic ?? 0);
+      const grouped = getGroupedDiffs().find(d => String(d.cn) === String(prod.cn));
+      const diff = grouped ? grouped.diff : (existing.counted - (existing.farmatic ?? 0));
       const sign = diff > 0 ? '+' : '';
       const diffTxt = diff === 0 ? 'OK' : sign + diff;
       beepOk(); vibrate(50);
-      toast(`${prod.name} ×${existing.counted}  (dif: ${diffTxt})`, diff === 0 ? 'success' : 'error');
+      toast(`${prod.name} · ${curZone} ×${existing.counted}  (total dif: ${diffTxt})`, diff === 0 ? 'success' : 'error');
       renderRecentList();
       renderHeader();
       showQuickCount(prod, existing);
@@ -872,16 +952,23 @@ async function processScan(code){
     } else {
       if(apiMode && prod.stock !== undefined) existing.farmatic = prod.stock;
       curProduct = prod;
-      editCount(prod.cn);
+      curEditZone = curZone;
+      editCount(key);
       beepOk(); vibrate(50);
       return;
     }
   }
 
   curProduct = prod;
+  curEditZone = curZone;
   showProductCard(prod);
 }
 
+function otherZonesHint(cn){
+  const others = entriesForCn(cn).filter(c => c.zone !== curZone);
+  if(!others.length) return '';
+  return `<p style="font-size:.75rem;color:var(--fg-muted);margin-top:8px;text-align:center">Ja comptat: ${esc(formatZonesDetail(others))}</p>`;
+}
 function showProductCard(prod){
   const area = document.getElementById('product-area');
   area.innerHTML = `
@@ -899,6 +986,7 @@ function showProductCard(prod){
         <button class="adj-btn" onclick="adjCount(+1)">+</button>
       </div>
       <button class="btn btn-primary btn-confirm" onclick="confirmCount()">Confirmar</button>
+      ${otherZonesHint(prod.cn)}
       <p style="font-size:.75rem;color:var(--fg-muted);margin-top:8px;text-align:center">
         O segueix escanejant per sumar +1 cada cop
       </p>
@@ -911,23 +999,29 @@ function showProductCard(prod){
 
 function showQuickCount(prod, entry){
   const area = document.getElementById('product-area');
-  const diff = entry.counted - (entry.farmatic ?? 0);
+  const key = countKey(prod.cn, entry.zone || curZone);
+  const siblings = entriesForCn(prod.cn);
+  const farmatic = resolveFarmatic(prod.cn, siblings);
+  const total = siblings.reduce((s,e) => s + (Number(e.counted)||0), 0);
+  const diff = total - farmatic;
   const diffCls = diff === 0 ? 'ok' : (diff < 0 ? 'deficit' : 'surplus');
   const sign = diff > 0 ? '+' : '';
+  const zonesTxt = formatZonesDetail(siblings);
   area.innerHTML = `
     <div class="product-result fade-in" style="padding:14px 16px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
         <div style="flex:1;min-width:0">
           <div class="product-name" style="font-size:.9rem">${esc(prod.name)}</div>
-          <div class="product-cn">Farmatic: ${entry.farmatic ?? 0}</div>
+          <div class="product-cn">Farmatic: ${farmatic} · Zona: ${esc(entry.zone || curZone)}</div>
+          <div class="zones-detail">${esc(zonesTxt)} (total ${total})</div>
         </div>
         <div style="text-align:center">
           <div style="font-size:1.6rem;font-weight:700;line-height:1">${entry.counted}</div>
-          <div style="font-size:.7rem;color:var(--fg-muted)">comptats</div>
+          <div style="font-size:.7rem;color:var(--fg-muted)">a la zona</div>
         </div>
         <span class="diff-badge ${diffCls}" style="font-size:.85rem;padding:4px 10px">${diff===0?'OK':sign+diff}</span>
       </div>
-      <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="editCount('${esc(prod.cn)}')">Editar quantitat</button>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%" onclick="editCount('${esc(key)}')">Editar quantitat</button>
     </div>`;
 }
 
@@ -960,29 +1054,35 @@ window.confirmCount = function(){
   if(val === ''){ toast('Introdueix un valor','error'); return; }
   const num = parseInt(val);
   if(isNaN(num) || num < 0){ toast('Valor no vàlid','error'); return; }
-  counts[curProduct.cn] = {
-    cn: curProduct.cn, name: curProduct.name, counted: num, zone: curZone,
+  const zone = curEditZone || curZone;
+  const key = countKey(curProduct.cn, zone);
+  counts[key] = {
+    cn: curProduct.cn, name: curProduct.name, counted: num, zone: zone,
     farmatic: curProduct.stock,
     ts: new Date().toISOString()
   };
   save();
-  const diff = num - curProduct.stock;
+  const grouped = getGroupedDiffs().find(d => String(d.cn) === String(curProduct.cn));
+  const diff = grouped ? grouped.diff : (num - (curProduct.stock ?? 0));
   const sign = diff > 0 ? '+' : '';
   if(diff === 0){ beepOk(); } else { beepDiff(); }
   vibrate(diff === 0 ? 50 : [50,30,50]);
-  toast(diff === 0 ? 'OK — stock correcte' : `Diferència: ${sign}${diff}`, diff === 0 ? 'success' : 'error');
+  toast(diff === 0 ? 'OK — stock correcte (total de zones)' : `Diferència total: ${sign}${diff}`, diff === 0 ? 'success' : 'error');
   renderRecentList();
   renderHeader();
   document.getElementById('product-area').innerHTML = '';
   curProduct = null;
+  curEditZone = null;
   setTimeout(() => { document.getElementById('cn-input').focus(); }, 200);
 };
 
-window.editCount = function(cn){
-  const entry = counts[cn];
+window.editCount = function(key){
+  const entry = counts[key];
   if(!entry) return;
+  const cn = entry.cn;
   const prod = catalog[cn] || { cn, name: entry.name, stock: entry.farmatic ?? 0 };
   curProduct = prod;
+  curEditZone = entry.zone;
   const area = document.getElementById('product-area');
   area.innerHTML = `
     <div class="product-result fade-in">
@@ -1030,6 +1130,7 @@ window.selectZone = function(name){
   curZone = name;
   save();
   renderZoneBar();
+  renderRecentList();
 };
 
 /* ═══════════ EXPORT ═══════════ */
@@ -1051,105 +1152,37 @@ async function downloadCSV(content, filename){
 }
 
 window.exportReport = async function(){
-  const diffs = getDiffs();
-  if(!diffs.length){ toast('No hi ha recomptes','error'); return; }
-  const rows = [['CN','Nom','Stock Farmatic','Recompte','Diferència','Zona','Data/Hora']];
-  for(const d of diffs){
-    const sign = d.diff > 0 ? '+' : '';
-    rows.push([d.cn, d.name, d.farmatic, d.counted, sign+d.diff, d.zone, new Date(d.ts).toLocaleString('ca')]);
-  }
+  const grouped = getGroupedDiffs();
+  if(!grouped.length){ toast('No hi ha recomptes','error'); return; }
   const date = new Date().toISOString().slice(0,10);
-  const ok = await downloadCSV(makeCSV(rows), `stockcheck_informe_${date}.csv`);
-  if(ok) toast('Informe descarregat','success');
-};
-
-window.exportFarmatic = async function(){
-  const diffs = getDiffs().filter(d => d.diff !== 0);
-  if(!diffs.length){ toast('No hi ha diferències','error'); return; }
-  const rows = [['CN','Stock Nou','Diferència']];
-  for(const d of diffs){
+  const sheet1 = [['CN','Nom','Stock Farmatic','Total comptat','Diferència','Zones detall']];
+  for(const d of grouped){
     const sign = d.diff > 0 ? '+' : '';
-    rows.push([d.cn, d.counted, sign+d.diff]);
+    sheet1.push([d.cn, d.name, d.farmatic, d.counted, d.diff === 0 ? 'OK' : sign + d.diff, d.zonesDetail]);
   }
-  const date = new Date().toISOString().slice(0,10);
-  const ok = await downloadCSV(makeCSV(rows), `stockcheck_farmatic_${date}.csv`);
-  if(ok) toast('Fitxer Farmatic descarregat','success');
-};
-
-/* ═══════════ ADJUST STOCK ═══════════ */
-window.openAdjustModal = function(){
-  const diffs = getDiffs().filter(d => d.diff !== 0);
-  if(!diffs.length){ toast('No hi ha diferències per aplicar','error'); return; }
-  document.getElementById('adjust-summary').textContent =
-    `S'aplicaran ${diffs.length} correccions d'stock a Farmatic.`;
-  document.getElementById('adjust-pwd').value = '';
-  document.getElementById('adjust-progress').hidden = true;
-  document.getElementById('btn-apply-adjust').disabled = false;
-  document.getElementById('adjust-modal').hidden = false;
-  setTimeout(() => document.getElementById('adjust-pwd').focus(), 100);
-};
-window.closeAdjustModal = function(){
-  document.getElementById('adjust-modal').hidden = true;
-};
-window.applyAdjustments = async function(){
-  const pwd = document.getElementById('adjust-pwd').value.trim();
-  if(!pwd){ toast('Introdueix la contrasenya','error'); return; }
-
-  const diffs = getDiffs().filter(d => d.diff !== 0);
-  if(!diffs.length){ closeAdjustModal(); return; }
-
-  const btn = document.getElementById('btn-apply-adjust');
-  btn.disabled = true;
-  btn.textContent = 'Aplicant...';
-  document.getElementById('adjust-progress').hidden = false;
-
-  const adjustments = diffs.map(d => ({ cn: d.cn, stock: d.counted }));
-
-  try {
-    const resp = await fetch(`${apiBase}/api/adjust`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pwd, adjustments })
-    });
-    const data = await resp.json();
-
-    if(!resp.ok || !data.ok){
-      toast(data.error || 'Error aplicant ajustos', 'error');
-      btn.disabled = false;
-      btn.textContent = 'Aplicar';
-      document.getElementById('adjust-progress').hidden = true;
-      return;
-    }
-
-    document.getElementById('adjust-bar').style.width = '100%';
-    document.getElementById('adjust-status').textContent =
-      `${data.applied}/${data.total} aplicats correctament`;
-
-    for(const r of data.results){
-      if(r.ok && counts[r.cn]){
-        counts[r.cn].farmatic = r.new;
-      }
-    }
-    save();
-
-    const failed = data.results.filter(r => !r.ok);
-    if(failed.length){
-      toast(`${data.applied} aplicats, ${failed.length} errors`, 'error');
-    } else {
-      toast(`${data.applied} correccions aplicades a Farmatic`, 'success');
-    }
-
-    setTimeout(() => {
-      closeAdjustModal();
-      renderResultsView();
-    }, 1200);
-
-  } catch(e){
-    toast('Error de connexió amb el servidor', 'error');
-    btn.disabled = false;
-    btn.textContent = 'Aplicar';
-    document.getElementById('adjust-progress').hidden = true;
+  const sheet2 = [['CN','Nom','Zona','Recompte','Data/Hora']];
+  const entries = Object.values(counts).slice().sort((a,b) => {
+    const c = String(a.cn).localeCompare(String(b.cn), 'ca');
+    if(c !== 0) return c;
+    return String(a.zone).localeCompare(String(b.zone), 'ca');
+  });
+  for(const c of entries){
+    sheet2.push([c.cn, c.name, c.zone, c.counted, c.ts ? new Date(c.ts).toLocaleString('ca') : '']);
   }
+  if(typeof XLSX !== 'undefined'){
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.aoa_to_sheet(sheet1);
+    const ws2 = XLSX.utils.aoa_to_sheet(sheet2);
+    XLSX.utils.book_append_sheet(wb, ws1, 'Diferències');
+    XLSX.utils.book_append_sheet(wb, ws2, 'Detall per zona');
+    XLSX.writeFile(wb, `stockcheck_informe_${date}.xlsx`);
+    toast('Excel descarregat','success');
+    return;
+  }
+  // Fallback CSV (two blocks) if the Excel library did not load
+  const csv = makeCSV(sheet1) + '\n\n' + makeCSV(sheet2);
+  const ok = await downloadCSV(csv, `stockcheck_informe_${date}.csv`);
+  if(ok) toast('Informe descarregat (CSV)','success');
 };
 
 /* ═══════════ CLEAR ═══════════ */
@@ -1175,7 +1208,7 @@ window.clearCounts = function(){
 function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
 function renderHeader(){
-  const n = Object.keys(counts).length;
+  const n = new Set(Object.values(counts).map(c => String(c.cn))).size;
   document.getElementById('hdr-count').textContent = n + ' comptats';
   const hdr = document.querySelector('.hdr h1');
   const existing = document.getElementById('api-indicator');
@@ -1219,30 +1252,34 @@ function renderRecentList(){
   }
   let html = '<div class="recent-list card" style="margin-top:14px"><div class="card-title">Últims recomptes</div>';
   for(const c of arr){
-    const farStock = apiMode ? (c.farmatic ?? 0) : (catalog[c.cn]?.stock ?? c.farmatic ?? 0);
-    const diff = c.counted - farStock;
+    const key = countKey(c.cn, c.zone);
+    const siblings = entriesForCn(c.cn);
+    const farStock = resolveFarmatic(c.cn, siblings);
+    const total = siblings.reduce((s,e) => s + (Number(e.counted)||0), 0);
+    const diff = total - farStock;
     const cls = diff === 0 ? 'ok' : (diff < 0 ? 'deficit' : 'surplus');
     const sign = diff > 0 ? '+' : '';
-    html += `<div class="recent-item" onclick="editCount('${esc(c.cn)}')" style="cursor:pointer">
+    html += `<div class="recent-item" onclick="editCount('${esc(key)}')" style="cursor:pointer">
       <span class="cn">${esc(c.cn)}</span>
       <span class="name">${esc(c.name)}</span>
       <span class="counted-badge">${c.counted}</span>
       <span class="diff-badge ${cls}">${diff===0?'OK':sign+diff}</span>
-      <button class="recent-del" onclick="event.stopPropagation();deleteCount('${esc(c.cn)}')" title="Eliminar">&times;</button>
+      <button class="recent-del" onclick="event.stopPropagation();deleteCount('${esc(key)}')" title="Eliminar">&times;</button>
     </div>`;
   }
   html += '</div>';
   area.innerHTML = html;
 }
 
-window.deleteCount = function(cn){
-  delete counts[cn];
+window.deleteCount = function(key){
+  delete counts[key];
   save();
   renderRecentList();
   renderHeader();
 };
 
 function renderResultsView(){
+  const partial = zoneFilter && zoneFilter !== 'all';
   const all = getDiffs();
   const withDiff = all.filter(d => d.diff !== 0);
   const deficits = all.filter(d => d.diff < 0);
@@ -1251,7 +1288,7 @@ function renderResultsView(){
   const totalSur = surplus.reduce((s,d) => s + d.diff, 0);
 
   document.getElementById('stats-area').innerHTML = `
-    <div class="stat-card"><div class="stat-value">${all.length}</div><div class="stat-label">Comptats</div></div>
+    <div class="stat-card"><div class="stat-value">${all.length}</div><div class="stat-label">${partial ? 'Parcial' : 'Comptats'}</div></div>
     <div class="stat-card"><div class="stat-value" style="color:var(--red)">${withDiff.length}</div><div class="stat-label">Diferències</div></div>
     <div class="stat-card"><div class="stat-value" style="color:var(--red)">${totalDef}</div><div class="stat-label">Falta</div></div>
     <div class="stat-card"><div class="stat-value" style="color:var(--amber)">${totalSur>0?'+':''}${totalSur}</div><div class="stat-label">Sobra</div></div>
@@ -1264,9 +1301,19 @@ function renderResultsView(){
     { key:'surplus', label:`Sobren (${surplus.length})` },
     { key:'ok', label:`OK (${all.length - withDiff.length})` },
   ];
-  document.getElementById('filter-bar').innerHTML = filters.map(f =>
-    `<button class="filter-chip ${filter===f.key?'active':''}" onclick="setFilter('${f.key}')">${f.label}</button>`
-  ).join('');
+  const zoneNames = [];
+  const seenZ = new Set();
+  for(const z of zones.concat(Object.values(counts).map(c => c.zone))){
+    if(z && !seenZ.has(z)){ seenZ.add(z); zoneNames.push(z); }
+  }
+  const zoneChips = [{ key:'all', label:'Totes les zones' }].concat(zoneNames.map(z => ({ key:z, label:z })));
+  document.getElementById('filter-bar').innerHTML =
+    filters.map(f =>
+      `<button class="filter-chip ${filter===f.key?'active':''}" onclick="setFilter('${f.key}')">${f.label}</button>`
+    ).join('') +
+    (zoneChips.length > 2 ? zoneChips.map(f =>
+      `<button class="filter-chip ${zoneFilter===f.key?'active':''}" onclick="setZoneFilter('${esc(f.key)}')">${esc(f.label)}</button>`
+    ).join('') : '');
 
   let filtered = all;
   if(filter==='diff') filtered = withDiff;
@@ -1275,42 +1322,42 @@ function renderResultsView(){
   else if(filter==='ok') filtered = all.filter(d => d.diff === 0);
 
   const ta = document.getElementById('diff-table-area');
-  if(!filtered.length){
-    ta.innerHTML = '<div class="empty-state" style="padding:30px"><p>Sense resultats</p></div>';
-    return;
+  let html = '';
+  if(partial){
+    html += `<div class="partial-banner">Vista parcial: només la zona «${esc(zoneFilter)}». La comparació amb l'stock de Farmatic no és el total de totes les zones.</div>`;
   }
-  let html = `<table class="diff-table">
+  if(!filtered.length){
+    html += '<div class="empty-state" style="padding:30px"><p>Sense resultats</p></div>';
+    ta.innerHTML = html;
+  } else {
+    html += `<table class="diff-table">
     <thead><tr>
-      <th>Producte</th><th class="num">Farmatic</th><th class="num">Real</th><th class="num">Dif.</th><th>Zona</th>
+      <th>Producte</th><th class="num">Farmatic</th><th class="num">${partial ? 'Zona' : 'Total'}</th><th class="num">Dif.</th><th>Zones</th>
     </tr></thead><tbody>`;
-  for(const d of filtered){
-    const cls = d.diff < 0 ? 'has-diff' : (d.diff > 0 ? 'has-surplus' : '');
-    const sign = d.diff > 0 ? '+' : '';
-    const diffCls = d.diff === 0 ? 'ok' : (d.diff < 0 ? 'deficit' : 'surplus');
-    html += `<tr class="${cls}">
+    for(const d of filtered){
+      const cls = d.diff < 0 ? 'has-diff' : (d.diff > 0 ? 'has-surplus' : '');
+      const sign = d.diff > 0 ? '+' : '';
+      const diffCls = partial ? 'partial' : (d.diff === 0 ? 'ok' : (d.diff < 0 ? 'deficit' : 'surplus'));
+      const diffLabel = partial ? 'Parcial' : (d.diff===0?'OK':sign+d.diff);
+      html += `<tr class="${cls}">
       <td class="product-cell"><div class="pname">${esc(d.name)}</div><div class="pcn">${esc(d.cn)}</div></td>
       <td class="num">${d.farmatic}</td>
       <td class="num" style="font-weight:600">${d.counted}</td>
-      <td class="num"><span class="diff-badge ${diffCls}">${d.diff===0?'OK':sign+d.diff}</span></td>
-      <td style="font-size:.75rem;color:var(--fg-muted)">${esc(d.zone)}</td>
+      <td class="num"><span class="diff-badge ${diffCls}">${diffLabel}</span></td>
+      <td style="font-size:.75rem;color:var(--fg-muted)">${esc(d.zonesDetail || d.zone || '')}</td>
     </tr>`;
+    }
+    html += '</tbody></table>';
+    ta.innerHTML = html;
   }
-  html += '</tbody></table>';
-  ta.innerHTML = html;
 
   const adjArea = document.getElementById('adjust-area');
   if(adjArea){
-    if(apiMode && withDiff.length > 0){
-      adjArea.innerHTML = `
-        <button class="btn adjust-btn-apply" style="width:100%;margin-top:12px;background:var(--red);color:#fff" onclick="openAdjustModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
-          </svg>
-          Aplicar ${withDiff.length} correccions a Farmatic
-        </button>`;
-    } else {
-      adjArea.innerHTML = '';
-    }
+    adjArea.innerHTML = `
+      <div class="adjust-note">
+        <p>Els ajustos d'stock es fan manualment a Farmatic a partir de l'Excel exportat. Aquesta eina només llegeix l'stock, no l'escriu.</p>
+        <button class="btn btn-primary" style="width:100%" onclick="exportReport()">Exportar Excel</button>
+      </div>`;
   }
 }
 
@@ -1372,8 +1419,7 @@ function renderConfigView(){
     <div class="settings-section">
       <div class="settings-section-title">Exportar</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn-primary" onclick="exportReport()" id="btn-export-report">Informe de diferències (CSV)</button>
-        <button class="btn btn-outline" onclick="exportFarmatic()" id="btn-export-farmatic">Ajustos per Farmatic (CSV)</button>
+        <button class="btn btn-primary" onclick="exportReport()" id="btn-export-report">Exportar Excel (diferències i detall per zona)</button>
       </div>
     </div>
 
@@ -1426,6 +1472,10 @@ window.setFilter = function(f){
   filter = f;
   renderResultsView();
 };
+window.setZoneFilter = function(z){
+  zoneFilter = z;
+  renderResultsView();
+};
 
 /* ═══════════ TOAST ═══════════ */
 let toastTimer;
@@ -1452,10 +1502,6 @@ document.addEventListener('keydown', function(e){
   if(e.key === 'Enter' && document.activeElement && document.activeElement.id === 'count-val'){
     e.preventDefault();
     confirmCount();
-  }
-  if(e.key === 'Enter' && document.activeElement && document.activeElement.id === 'adjust-pwd'){
-    e.preventDefault();
-    applyAdjustments();
   }
 });
 document.getElementById('file-input').addEventListener('change', function(){
